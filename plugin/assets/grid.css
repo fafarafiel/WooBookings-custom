@@ -1,0 +1,1010 @@
+/**
+ * WooBookings Custom, booking grid. Self-contained, BEM, mobile-first.
+ *
+ * Palette tokens are declared once on `.wbc-grid` and everything else refers to them, so a
+ * deployment can be re-skinned by editing the block below and nothing else.
+ *
+ * SPECIFICITY IS LOAD-BEARING. Two independent stylesheets fight this component:
+ *
+ *   1. The theme reset paints EVERY button on hover AND focus from ONE selector, of the shape
+ *      `[type="button"]:focus, [type="button"]:hover, button:focus, button:hover`. Because our
+ *      buttons carry `type="button"`, the theme's winning member is (0,2,0), not (0,1,1).
+ *      State rules therefore need (0,3,0), for example `.wbc-grid .wbc-grid__x:hover`.
+ *   2. Page-builder kits emit `.kit-N h2` and `.kit-N button:focus`, which beat a bare class.
+ *      Base rules for headings and dimensions need the `.wbc-grid` prefix for the same reason.
+ *
+ * THE `:focus` TRAP, written down because the same mistake happened three times here:
+ *
+ *   a. Covering only `:hover` leaves `:focus` exposed. A MOUSE CLICK leaves focus behind, so the
+ *      foreign colour stays on screen and does not clear when the pointer leaves.
+ *      `:focus-visible` does not catch it, because a mouse click does not satisfy it.
+ *   b. Order matters: `:focus` must come BEFORE `:hover` and `:focus-visible`. All three sit at
+ *      (0,3,0), so a tie is broken by source order, and the reverse order kills hover entirely on
+ *      any control that happens to be focused.
+ *   c. A control whose BASE rule already carries the prefix ties the theme and wins on sheet
+ *      order, so it defends itself. A bare base loses and needs an explicit `:focus`.
+ *
+ * Adding a button here? Write `:focus` next to `:hover`, in that order.
+ */
+
+.wbc-grid {
+	--wbc-surface: #ffffff;
+	--wbc-surface-hi: #fdf6ee;
+	--wbc-text: #24150e;
+	--wbc-text-soft: #6b5f58;
+	--wbc-accent: #c04b0a;
+	--wbc-accent-hi: #e59f47;
+	--wbc-accent-wash: #fbead6;
+	--wbc-on-accent: #ffffff;
+	--wbc-on-accent-hi: #24150e;
+	--wbc-line: #e7ded6;
+	--wbc-line-hi: #c9b4a2;
+	--wbc-error: #a12626;
+	--wbc-radius: 20px;
+	--wbc-radius-pill: 100px;
+	--wbc-shadow: 0 2px 12px rgba(24, 9, 1, 0.28);
+	--wbc-ease: 0.18s cubic-bezier(0.2, 0.6, 0.3, 1);
+
+	box-sizing: border-box;
+	width: 100%;
+	max-width: 100%;
+	color: var(--wbc-text);
+	font-size: 17px;
+	line-height: 1.5;
+}
+
+.wbc-grid *,
+.wbc-grid *::before,
+.wbc-grid *::after {
+	box-sizing: border-box;
+}
+
+/* Ring uses the light accent: on a dark CTA the base accent would be barely visible. */
+.wbc-grid :focus-visible {
+	outline: 3px solid var(--wbc-accent-hi);
+	outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.wbc-grid *,
+	.wbc-grid *::before,
+	.wbc-grid *::after {
+		transition-duration: 0.01ms !important;
+	}
+}
+
+/* ------------------------------------------------------- nav shell (Faza 1) */
+
+/*
+ * !important because author display rules on classes outsrank the user-agent
+ * `[hidden] { display: none }`. Without this guard a control hidden by the attribute would
+ * come back on screen through styling alone.
+ */
+.wbc-grid [hidden] {
+	display: none !important;
+}
+
+/* Region statusu: czytelny dla AT, niewidoczny wizualnie (wzorzec sr-only). */
+.wbc-grid__status {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	border: 0;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- nav row (‹ › ) */
+
+/* The row stretches children to tile height; arrows and the select offset the day strip's inner
+   padding with margins so their height matches a tile.
+   STICKY: the navigation pins to the top of the viewport while the list scrolls. No ancestor of
+   the grid establishes an overflow context, so sticky works, and it unpins naturally at the end
+   of the component. The background is opaque and matches the page, so cards scroll UNDER the
+   navigation rather than between the tiles. */
+.wbc-grid__nav {
+	display: flex;
+	align-items: stretch;
+	gap: 8px;
+	position: sticky;
+	top: 0;
+	z-index: 90;
+	background: #180901;
+	padding: 8px 0;
+}
+
+/* Up to the builder's mobile breakpoint the theme shows a FIXED header, so the navigation has to
+   pin BELOW it or the day strip disappears under the bar. Measure the header per breakpoint
+   rather than assuming one threshold: above it the header is static and scrolls away. */
+@media (max-width: 767px) {
+	.wbc-grid__nav {
+		top: 90px;
+	}
+}
+
+/* The strip is no longer greedy: the next arrow hugs the tiles and the month control is pushed
+   right by margin-left:auto. */
+.wbc-grid__nav .wbc-grid__daypicker {
+	flex: 0 1 auto;
+	min-width: 0;
+}
+
+/* The base carries the prefix defensively: themes style bare `button` with a selector that beats
+   a lone class. See the specificity note in the file header. */
+.wbc-grid .wbc-grid__pager {
+	flex: 0 0 auto;
+	align-self: stretch;
+	margin: 4px 0 12px;
+	min-width: 48px;
+	min-height: 44px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border: 1px solid var(--wbc-line-hi);
+	/* Radius proportionally smaller than a tile, because the arrow is narrower. */
+	border-radius: 14px;
+	/* Accent wash at rest rather than the white of the tiles. */
+	background: var(--wbc-accent-wash);
+	color: var(--wbc-text);
+	font-size: 24px;
+	line-height: 1;
+	cursor: pointer;
+	transition: background-color var(--wbc-ease), border-color var(--wbc-ease);
+}
+
+/* Prefixed, see the specificity note in the file header.
+   Hover is full accent with a dark glyph, like the selected day. */
+.wbc-grid .wbc-grid__pager:hover {
+	background: var(--wbc-accent-hi);
+	border-color: var(--wbc-accent-hi);
+	color: var(--wbc-text);
+}
+
+/* Range boundary: dimmed but still focusable and perceivable, via aria-disabled rather than the
+   disabled attribute. */
+.wbc-grid .wbc-grid__pager[aria-disabled="true"],
+.wbc-grid .wbc-grid__pager[aria-disabled="true"]:hover {
+	opacity: 0.4;
+	cursor: default;
+	background: var(--wbc-surface);
+	border-color: var(--wbc-line);
+	transform: none;
+}
+
+/* ------------------------------------------------------------- month select (F3) */
+
+.wbc-grid__month {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex: 0 0 auto;
+	align-self: stretch;
+	margin: 4px 0 12px;
+	margin-left: auto;
+}
+
+/* The label sits on the DARK page background rather than a white card, so the body text token
+   would be invisible. Cream, like the page headings. */
+.wbc-grid__month-label {
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--wbc-surface-hi);
+}
+
+/* At least 16px, or iOS auto-zooms when the select takes focus. Only the CLOSED state is styled
+   (appearance:none plus a custom arrow); the expanded list stays native, which is an
+   accessibility advantage rather than a gap. The arrow colour clears the 3:1 required by
+   SC 1.4.11 against its background. */
+.wbc-grid__month-select {
+	appearance: none;
+	-webkit-appearance: none;
+	height: 100%;
+	font-size: 17px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	min-height: 44px;
+	padding: 8px 40px 8px 16px;
+	border: 1px solid var(--wbc-line-hi);
+	border-radius: 14px;
+	background-color: var(--wbc-surface);
+	color: var(--wbc-text);
+	background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%2324150e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+	background-repeat: no-repeat;
+	background-position: right 14px center;
+	background-size: 12px 8px;
+	cursor: pointer;
+}
+
+/* Explicit ring at (0,3,0): a bare `:focus-visible` inside the component is (0,2,0) and a kit
+   selector can outrank it on buttons. */
+.wbc-grid .wbc-grid__pager:focus-visible,
+.wbc-grid .wbc-grid__month-select:focus-visible,
+.wbc-grid .wbc-grid__day:focus-visible {
+	outline: 3px solid var(--wbc-accent-hi);
+	outline-offset: 2px;
+}
+
+/*
+ * Forced colours: (a) aria-disabled does NOT receive the system GrayText that a native :disabled
+ * gets, and forced-colors drops our opacity dimming, so without this rule the boundary arrow
+ * would be indistinguishable for exactly the users who need contrast most; (b) the custom SVG
+ * arrow has a hard-coded colour and can vanish on a forced background, so the native appearance
+ * is restored there.
+ */
+@media (forced-colors: active) {
+	.wbc-grid .wbc-grid__month-select {
+		appearance: auto;
+		-webkit-appearance: auto;
+		background-image: none;
+		padding-right: 12px;
+	}
+
+	.wbc-grid .wbc-grid__pager[aria-disabled="true"],
+	.wbc-grid .wbc-grid__pager[aria-disabled="true"]:hover {
+		color: GrayText;
+		border-color: GrayText;
+		opacity: 1;
+	}
+}
+
+/* ------------------------------------------------------------------- day picker */
+
+.wbc-grid__daypicker {
+	display: flex;
+	gap: 8px;
+	overflow-x: auto;
+	padding: 4px 0 12px;
+	scrollbar-width: thin;
+	-webkit-overflow-scrolling: touch;
+}
+
+.wbc-grid__day {
+	flex: 0 0 auto;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 2px;
+	min-width: 72px;
+	padding: 12px 14px;
+	border: 1px solid var(--wbc-line);
+	border-radius: var(--wbc-radius);
+	background: var(--wbc-surface);
+	color: var(--wbc-text);
+	font: inherit;
+	cursor: pointer;
+	transition: background-color var(--wbc-ease), border-color var(--wbc-ease),
+		transform var(--wbc-ease);
+}
+
+/* Prefixed, see the file header. The selected day is the full accent with dark text; the accent
+   is never used as a text colour, because it fails contrast on light surfaces. */
+.wbc-grid .wbc-grid__day--selected,
+.wbc-grid .wbc-grid__day--selected:hover,
+.wbc-grid .wbc-grid__day--selected:focus {
+	background: var(--wbc-accent-hi);
+	border-color: var(--wbc-accent-hi);
+	color: var(--wbc-on-accent-hi);
+	transform: none;
+}
+
+.wbc-grid__day-name {
+	font-size: 12px;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	opacity: 0.8;
+}
+
+.wbc-grid__day--selected .wbc-grid__day-name {
+	opacity: 1;
+}
+
+.wbc-grid__day-num {
+	font-size: 20px;
+	font-weight: 700;
+	line-height: 1.1;
+}
+
+/* -------------------------------------------------------------------------- list */
+
+.wbc-grid__list {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.wbc-grid__loading,
+.wbc-grid__empty,
+.wbc-grid__error {
+	margin: 0;
+	padding: 24px 8px;
+	color: var(--wbc-text-soft);
+	text-align: center;
+}
+
+/* The base error red measured 1.66 on the dark background, which is unreadable, so this is a
+   lighter red at 4.56. */
+.wbc-grid__error {
+	color: var(--wbc-error);
+}
+
+/* -------------------------------------------------------------------------- card */
+
+.wbc-grid__card {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 8px;
+	padding: 18px;
+	background: var(--wbc-surface);
+	border: 1px solid var(--wbc-line);
+	border-radius: var(--wbc-radius);
+	box-shadow: var(--wbc-shadow);
+	transition: border-color var(--wbc-ease), background-color var(--wbc-ease);
+}
+
+/* The card responds to the pointer gently; the strong signal belongs to the button. */
+.wbc-grid .wbc-grid__card:hover {
+	background: var(--wbc-surface-hi);
+	border-color: var(--wbc-line-hi);
+}
+
+.wbc-grid__card--past,
+.wbc-grid__card--full {
+	opacity: 0.62;
+}
+
+.wbc-grid .wbc-grid__card--past:hover,
+.wbc-grid .wbc-grid__card--full:hover {
+	background: var(--wbc-surface);
+	border-color: var(--wbc-line);
+}
+
+.wbc-grid__time {
+	font-size: 19px;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	letter-spacing: 0.02em;
+	color: var(--wbc-text);
+}
+
+.wbc-grid__name {
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--wbc-text);
+	font-size: 18px;
+	font-weight: 700;
+	text-align: left;
+	cursor: pointer;
+	text-decoration: underline;
+	text-decoration-color: var(--wbc-line-hi);
+	text-decoration-thickness: 1px;
+	text-underline-offset: 4px;
+	transition: color var(--wbc-ease), text-decoration-color var(--wbc-ease);
+}
+
+/*
+ * Explicit hover/focus state in the copper accent (K7). The namespace prefix is load-bearing:
+ * (0,3,0) beats an Elementor kit's global `.elementor-kit-N button:hover` (0,2,1), which would
+ * beat a bare `.wbc-grid__name:hover` (0,2,0) and bleed the theme's red into the grid.
+ */
+/*
+ * Hover MUST NOT touch geometry. An earlier version painted a badge with `padding: 2px 8px` and
+ * `margin: 0 -8px`, and the comment beside it claimed the badge did not move the layout. It did:
+ * the negative margin compensated the HORIZONTAL axis only, nothing offset the vertical 2px, so
+ * the button grew by 4px and the whole card jumped under the cursor.
+ *
+ * The hover state therefore changes COLOUR only, a property that cannot affect layout by
+ * construction. Keyboard focus adds an outline, which is painted outside the box and is likewise
+ * layout-free.
+ */
+/* `:focus` BEFORE `:hover`, see the focus trap in the file header. Without it the title kept the
+   theme colour after the modal was closed with the mouse: the close handler returns focus to the
+   button, and a mouse click does not satisfy `:focus-visible`, so the theme's `button:focus` was
+   the only matching rule. */
+.wbc-grid .wbc-grid__name:focus {
+	background: none;
+	color: var(--wbc-text);
+	text-decoration-color: var(--wbc-line-hi);
+}
+
+.wbc-grid .wbc-grid__name:hover,
+.wbc-grid .wbc-grid__name:focus-visible {
+	background: none;
+	color: var(--wbc-accent);
+	text-decoration-color: var(--wbc-accent);
+}
+
+.wbc-grid .wbc-grid__name:focus-visible {
+	outline: 3px solid var(--wbc-text);
+	outline-offset: 3px;
+	border-radius: 4px;
+}
+
+.wbc-grid__meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 20px;
+	font-size: 15px;
+	color: var(--wbc-text-soft);
+}
+
+.wbc-grid__occupancy {
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	color: var(--wbc-text);
+}
+
+/* ------------------------------------------------------------------------ action */
+
+.wbc-grid__action {
+	display: flex;
+	align-items: center;
+}
+
+.wbc-grid__action-inner {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 12px;
+	width: 100%;
+}
+
+.wbc-grid__form {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin: 0;
+	flex-wrap: wrap;
+}
+
+/* Stepper */
+
+.wbc-grid__stepper {
+	display: inline-flex;
+	align-items: center;
+	border: 1px solid var(--wbc-line);
+	border-radius: var(--wbc-radius-pill);
+	overflow: hidden;
+}
+
+.wbc-grid__step {
+	width: 40px;
+	height: 40px;
+	border: 0;
+	background: transparent;
+	color: var(--wbc-text);
+	font-size: 20px;
+	font-weight: 700;
+	line-height: 1;
+	cursor: pointer;
+	transition: background-color var(--wbc-ease), color var(--wbc-ease);
+}
+
+/* `:focus` BEFORE `:hover`, see the focus trap in the file header. Without it a mouse click on
+   the minus or plus control left the theme's own button colour behind. */
+.wbc-grid .wbc-grid__step:focus {
+	background: transparent;
+	color: var(--wbc-text);
+}
+
+.wbc-grid .wbc-grid__step:hover:not(:disabled) {
+	background: var(--wbc-accent-hi);
+	color: var(--wbc-on-accent-hi);
+}
+
+.wbc-grid .wbc-grid__step:focus-visible {
+	outline: 3px solid var(--wbc-text);
+	outline-offset: -3px;
+}
+
+.wbc-grid .wbc-grid__step:disabled {
+	color: #c3b7ae;
+	background: transparent;
+	cursor: not-allowed;
+}
+
+.wbc-grid__step-value {
+	min-width: 32px;
+	text-align: center;
+	font-size: 16px;
+	font-weight: 700;
+}
+
+/* Duration select */
+
+.wbc-grid__control--duration {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 15px;
+}
+
+.wbc-grid__select {
+	padding: 9px 12px;
+	border: 1px solid var(--wbc-line);
+	border-radius: var(--wbc-radius-pill);
+	background: var(--wbc-surface-hi);
+	color: var(--wbc-text);
+	font: inherit;
+	font-size: 15px;
+	cursor: pointer;
+	transition: border-color var(--wbc-ease);
+}
+
+.wbc-grid .wbc-grid__select:hover {
+	border-color: var(--wbc-accent-hi);
+}
+
+/* The dropdown list renders natively; without this its options would be white on white. */
+.wbc-grid__select option {
+	background: var(--wbc-surface);
+	color: var(--wbc-text);
+}
+
+/* CTA + state pills */
+
+/*
+ * Geometry matched to the site's own button so the grid CTA reads as the same control as the
+ * rest of the page rather than a widget from somewhere else.
+ */
+.wbc-grid__cta {
+	padding: 15px 30px;
+	border: 0;
+	border-radius: var(--wbc-radius-pill);
+	background: var(--wbc-accent);
+	color: var(--wbc-on-accent);
+	font-size: 15px;
+	font-weight: 500;
+	line-height: 1;
+	cursor: pointer;
+	transition: background-color var(--wbc-ease), color var(--wbc-ease),
+		transform var(--wbc-ease), box-shadow var(--wbc-ease);
+}
+
+/* Hover moves to the accent and RAISES contrast rather than dimming it. */
+.wbc-grid .wbc-grid__cta:hover,
+.wbc-grid .wbc-grid__cta:focus {
+	background: var(--wbc-accent-hi);
+	color: var(--wbc-on-accent-hi);
+	transform: translateY(-2px);
+	box-shadow: 0 6px 18px rgba(24, 9, 1, 0.28);
+}
+
+.wbc-grid .wbc-grid__cta:active {
+	transform: translateY(0);
+	box-shadow: none;
+}
+
+/*
+ * Busy state: spinner BEFORE the label. The button keeps its label and width, so nothing jumps,
+ * and the gap reserves space only for the duration of the request. `disabled` alone is not
+ * enough: it dims the button without saying that something is happening.
+ */
+.wbc-grid__cta {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0;
+}
+
+.wbc-grid .wbc-grid__cta--busy {
+	gap: 10px;
+	cursor: progress;
+	opacity: 1;
+}
+
+.wbc-grid .wbc-grid__cta--busy::before {
+	content: '';
+	width: 15px;
+	height: 15px;
+	flex: 0 0 auto;
+	border: 2px solid currentColor;
+	/* The transparent segment creates the gap that makes the rotation visible at all. */
+	border-top-color: transparent;
+	border-radius: 50%;
+	animation: wbc-grid-spin 0.7s linear infinite;
+}
+
+@keyframes wbc-grid-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+/*
+ * Under reduced motion the spinner slows rather than disappearing: it is a progress indicator,
+ * so removing it would take away the only visual sign that work is in flight. A slower rotation
+ * honours the intent of the setting without withholding the information.
+ */
+@media (prefers-reduced-motion: reduce) {
+	.wbc-grid .wbc-grid__cta--busy::before {
+		animation-duration: 2.4s;
+	}
+}
+
+.wbc-grid__pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 14px 24px;
+	border: 1px solid var(--wbc-line);
+	border-radius: var(--wbc-radius-pill);
+	background: #f4efea;
+	color: var(--wbc-text-soft);
+	font-size: 15px;
+	font-weight: 500;
+	line-height: 1;
+}
+
+/* --------------------------------------------------------------------- desktop */
+
+@media (min-width: 720px) {
+	.wbc-grid__card {
+		grid-template-columns: 64px minmax(160px, 1fr) auto auto;
+		align-items: center;
+		gap: 16px;
+	}
+
+	.wbc-grid__action {
+		justify-content: flex-end;
+	}
+}
+
+/* ----------------------------------------------------------------------- modal */
+
+.wbc-grid__modal {
+	position: fixed;
+	inset: 0;
+	z-index: 100000;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 16px;
+	background: rgba(10, 4, 1, 0.72);
+}
+
+.wbc-grid__modal[hidden] {
+	display: none;
+}
+
+/* The dialog no longer scrolls as a whole. Only the body scrolls, which keeps the header and its
+   close button reachable when the description is long. */
+.wbc-grid__modal-dialog {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	max-width: 520px;
+	max-height: 90vh;
+	overflow: hidden;
+	background: var(--wbc-surface);
+	border: 1px solid var(--wbc-line);
+	border-radius: var(--wbc-radius);
+	box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+}
+
+.wbc-grid__modal-header {
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
+	flex: 0 0 auto;
+	padding: 20px 24px 12px;
+}
+
+.wbc-grid__modal-body {
+	flex: 1 1 auto;
+	overflow-y: auto;
+	padding: 0 24px 24px;
+}
+
+/* Prefixed to beat the kit's `h2` rule, which painted white text on a white dialog: the title was
+   always there, just invisible at contrast 1.00. `clamp` instead of a fixed size so a long name
+   does not blow out the header on a narrow screen. */
+.wbc-grid .wbc-grid__modal-title {
+	margin: 0;
+	flex: 1 1 auto;
+	font-size: clamp(20px, 5vw, 24px);
+	font-weight: 700;
+	line-height: 1.25;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--wbc-text);
+}
+
+/* Prefixed. `padding: 0` is LOAD-BEARING: without it the kit's mobile button padding inflates the
+   circle into an ellipse. */
+.wbc-grid .wbc-grid__modal-close {
+	position: static;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	width: 44px;
+	height: 44px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: var(--wbc-accent-wash);
+	color: var(--wbc-text);
+	cursor: pointer;
+	transition: background-color var(--wbc-ease), color var(--wbc-ease);
+}
+
+/* States at (0,3,0), see the file header. Order matters: on a specificity tie, source position
+   decides.
+   `:focus` deliberately looks like the resting state, because the modal hands focus to this
+   button as soon as it opens and highlighting it after a mouse click would be noise. Keyboard
+   users get the full accent plus a ring through `:focus-visible`. The ring uses the text colour,
+   which clears 3:1 on every surface it can land on (SC 1.4.11). */
+.wbc-grid .wbc-grid__modal-close:focus {
+	background: var(--wbc-accent-wash);
+	color: var(--wbc-text);
+}
+
+/* `:hover` MUST follow `:focus`: this button is focused from the moment the modal opens, so at
+   equal specificity source order decides. The reverse order kills hover completely. */
+.wbc-grid .wbc-grid__modal-close:hover {
+	background: var(--wbc-accent-hi);
+	color: var(--wbc-on-accent-hi);
+}
+
+.wbc-grid .wbc-grid__modal-close:focus-visible {
+	background: var(--wbc-accent-hi);
+	color: var(--wbc-on-accent-hi);
+	outline: 3px solid var(--wbc-text);
+	outline-offset: 2px;
+}
+
+.wbc-grid .wbc-grid__modal-close:active {
+	background: var(--wbc-accent);
+	color: var(--wbc-on-accent);
+}
+
+.wbc-grid__modal-close svg {
+	display: block;
+	width: 20px;
+	height: 20px;
+	pointer-events: none;
+}
+
+.wbc-grid__modal-desc {
+	margin: 0;
+	color: var(--wbc-text-soft);
+	white-space: pre-line;
+}
+
+/* ----------------------------------------------------------------------- host line */
+.wbc-grid__host {
+	display: flex;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-top: 4px;
+	font-size: 14px;
+	line-height: 1.35;
+}
+
+.wbc-grid__host-label {
+	color: var(--wbc-text-soft);
+}
+
+/* A `button` under the theme reset, see the file header. The base at (0,2,0) strips the button
+   look; the states below sit at (0,3,0) because the theme targets `:hover` and `:focus` through
+   an attribute selector. */
+.wbc-grid .wbc-grid__host-name {
+	padding: 0;
+	border: 0;
+	background: none;
+	font: inherit;
+	color: var(--wbc-text);
+	text-decoration: underline;
+	text-underline-offset: 3px;
+	text-decoration-color: var(--wbc-line-hi);
+	cursor: pointer;
+	transition: color var(--wbc-ease), text-decoration-color var(--wbc-ease);
+}
+
+.wbc-grid .wbc-grid__host-name:hover,
+.wbc-grid .wbc-grid__host-name:focus {
+	background: none;
+	color: var(--wbc-accent);
+	text-decoration-color: var(--wbc-accent);
+}
+
+.wbc-grid .wbc-grid__host-name:focus-visible {
+	outline: 3px solid var(--wbc-text);
+	outline-offset: 2px;
+	border-radius: 4px;
+}
+
+/* Dimmed cards (past or sold out) mute their whole content. The host must not remain the single
+   full-contrast element, or it reads as an active link on a dead card. */
+.wbc-grid__card--past .wbc-grid__host-name,
+.wbc-grid__card--full .wbc-grid__host-name {
+	color: var(--wbc-text-soft);
+}
+
+body.wbc-grid-modal-open {
+	overflow: hidden;
+}
+
+/* ----------------------------------------------------------------------- toast */
+
+.wbc-grid__toast-region {
+	position: sticky;
+	bottom: 16px;
+	z-index: 20;
+}
+
+.wbc-grid__toast {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-top: 12px;
+	padding: 14px 18px;
+	border: 1px solid var(--wbc-line-hi);
+	/* Success is signalled by the left edge in the accent, without flooding the toast with colour. */
+	border-left: 4px solid var(--wbc-accent-hi);
+	border-radius: var(--wbc-radius);
+	background: var(--wbc-surface-hi);
+	color: var(--wbc-text);
+	box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+}
+
+.wbc-grid__toast--error {
+	border-left-color: var(--wbc-error);
+}
+
+.wbc-grid__toast-msg {
+	flex: 1 1 auto;
+	font-size: 15px;
+}
+
+.wbc-grid__toast-link {
+	color: var(--wbc-text);
+	font-weight: 700;
+	text-decoration: underline;
+	text-underline-offset: 3px;
+	white-space: nowrap;
+}
+
+.wbc-grid__toast-close {
+	width: 32px;
+	height: 32px;
+	flex: 0 0 auto;
+	border: 0;
+	border-radius: 50%;
+	background: #f0e8e0;
+	color: var(--wbc-text);
+	font-size: 18px;
+	line-height: 1;
+	cursor: pointer;
+	transition: background-color var(--wbc-ease);
+}
+
+.wbc-grid .wbc-grid__toast-close:hover {
+	background: var(--wbc-accent-hi);
+	color: var(--wbc-on-accent-hi);
+}
+
+@media (max-width: 480px) {
+	.wbc-grid__toast {
+		flex-wrap: wrap;
+	}
+}
+
+/* ---------------------------------------------------------------- mobile card */
+
+@media (max-width: 480px) {
+	.wbc-grid__card {
+		gap: 6px;
+	}
+
+	.wbc-grid__action-inner {
+		justify-content: space-between;
+	}
+
+	.wbc-grid__form {
+		width: 100%;
+		justify-content: space-between;
+	}
+}
+
+/* The mobile block lives at the END of the file: tile rules share specificity with the base, so
+   source order decides. A same-specificity block placed before the base silently loses. */
+@media (max-width: 640px) {
+	/*
+	 * Mobile: the day strip FITS the screen (tiles share the width evenly, no horizontal scroll)
+	 * and the whole navigation sits below it. Grid areas rather than flex-wrap, and never `order`:
+	 * DOM order stays the Tab order. A deliberate trade of screen geometry against focus order,
+	 * where the sequence stays functionally sensible and the visual zigzag spans two adjacent rows.
+	 */
+	/* Three tiers: month above the days as the context filter, the day strip in the middle, and the
+	   arrow pair together below on the right, in the thumb zone. Arrows flanking the select read as
+	   "change the month", so the two functions are separated in space. */
+	/* The pinned offset is the header height minus the month tier, so when pinned the month slides
+	   UNDER the fixed header and exactly the days and arrows stay visible. The select height is
+	   fixed below to keep that offset deterministic. */
+	.wbc-grid__nav {
+		display: grid;
+		grid-template-columns: 1fr auto auto;
+		grid-template-areas:
+			"month month month"
+			"strip strip strip"
+			".     prev  next";
+		gap: 8px;
+		top: 34px;
+	}
+
+	.wbc-grid__nav .wbc-grid__daypicker {
+		grid-area: strip;
+		overflow-x: visible;
+		padding: 0;
+		gap: 4px;
+	}
+
+	/* Tiles share the full width and stay touch-sized. The prefix is REQUIRED here: kits style bare
+	   `button` with padding through a selector that beats a lone class, which silently inflates
+	   tile height no matter what the rule says. */
+	.wbc-grid .wbc-grid__day {
+		flex: 1 1 0;
+		min-width: 0;
+		padding: 10px 2px;
+	}
+
+	.wbc-grid .wbc-grid__day-name {
+		font-size: 9px;
+		letter-spacing: 0.03em;
+	}
+
+	.wbc-grid .wbc-grid__day-num {
+		font-size: 16px;
+	}
+
+	.wbc-grid .wbc-grid__pager {
+		grid-area: prev;
+		align-self: auto;
+		margin: 0;
+		min-height: 48px;
+	}
+
+	.wbc-grid .wbc-grid__pager--next {
+		grid-area: next;
+	}
+
+	.wbc-grid__month {
+		grid-area: month;
+		align-self: auto;
+		margin: 0;
+		min-width: 0;
+	}
+
+	.wbc-grid__month-select {
+		/* Fixed height, because the month tier height feeds the pinned offset above. */
+		height: 48px;
+		min-height: 48px;
+		width: 100%;
+		min-width: 0;
+		font-size: 16px;
+	}
+
+	/* SC 2.4.11 Focus Not Obscured (AA, WCAG 2.2). The parked offset slides the month tier UNDER the
+	   fixed header, which is intended for the eye, but the KEYBOARD still goes there: Tab put focus
+	   on a select sitting entirely behind the header, and the browser does not scroll it into view
+	   because the element IS in the viewport, merely covered. While the select holds keyboard focus
+	   the navigation drops below the header and reveals all three tiers. Scoped with `:has()` so
+	   pointer input never moves the layout, which is free here because an obscured select cannot be
+	   clicked in the first place. Browsers without `:has()` keep the pre-fix behaviour. */
+	.wbc-grid__nav:has(.wbc-grid__month-select:focus-visible) {
+		top: 90px;
+	}
+}
