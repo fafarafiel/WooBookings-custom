@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  php:
+    name: PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 8.2 is the declared minimum, 8.4 is what the plugin runs on in production.
+        php: ['8.2', '8.3', '8.4']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+
+      - name: Lint every PHP file
+        run: |
+          find plugin -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Unit tests
+        run: php tests/php/run.php
+
+  js:
+    name: JavaScript
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Syntax check
+        run: |
+          node --check plugin/assets/grid.js
+          node --check plugin/assets/slots.js
+
+      - name: Unit tests
+        run: node --test tests/js/slots.test.js
+
+  hygiene:
+    name: Repository hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: No leftover debug statements
+        run: |
+          if grep -rn --include='*.js' -E '\bconsole\.(log|debug)\(' plugin/assets; then
+            echo "::error::console.log left in shipped assets"
+            exit 1
+          fi
+          if grep -rn --include='*.php' -E '\b(var_dump|print_r|error_log)\s*\(' plugin; then
+            echo "::error::debug output left in PHP"
+            exit 1
+          fi
+
+      - name: Every PHP file guards direct access
+        run: |
+          missing=0
+          for f in $(find plugin -name '*.php'); do
+            if ! grep -q "defined( 'ABSPATH' )" "$f" && [ "$(basename "$f")" != "uninstall.php" ]; then
+              echo "::error file=$f::missing ABSPATH guard"
+              missing=1
+            fi
+          done
+          exit $missing
+
+      - name: Plugin header version matches the constant
+        run: |
+          header=$(grep -m1 '^ \* Version:' plugin/woobookings-custom.php | tr -dc '0-9.')
+          const=$(grep -m1 "define( 'WOOBOOKINGS_CUSTOM_VERSION'" plugin/woobookings-custom.php | tr -dc '0-9.')
+          echo "header=$header constant=$const"
+          [ "$header" = "$const" ] || { echo "::error::version drift between the plugin header and the constant"; exit 1; }
