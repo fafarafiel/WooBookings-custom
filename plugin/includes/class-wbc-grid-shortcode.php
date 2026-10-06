@@ -1,6 +1,7 @@
 <?php
 /**
- * Shortcode — [wbc_grid_rezerwacji]. Enqueues the grid, localizes the payload, prints the shell.
+ * Shortcode — [wbc_grid] (and its 1.0.0 name [wbc_grid_rezerwacji]). Enqueues the grid, localizes
+ * the payload, prints the shell.
  *
  * @package WooBookings_Custom
  */
@@ -8,12 +9,12 @@
 defined( 'ABSPATH' ) || exit;
 
 /**
- * No custom REST/AJAX endpoint in slice 1 → no read nonce to protect. Data travels via
+ * No custom REST/AJAX endpoint, so there is no read nonce to protect. Data travels via
  * wp_localize_script; the CTA form-POST goes to the native Woo add-to-cart handler.
  */
 final class WBC_Grid_Shortcode {
 
-	const HANDLE = 'wbc-nordic-grid';
+	const HANDLE = 'wbc-grid';
 
 	/** @var WBC_Grid_Data */
 	private $grid_data;
@@ -23,6 +24,8 @@ final class WBC_Grid_Shortcode {
 	 */
 	public function __construct( WBC_Grid_Data $grid_data ) {
 		$this->grid_data = $grid_data;
+		add_shortcode( 'wbc_grid', array( $this, 'render' ) );
+		// The 1.0.0 name, kept so pages built with it keep working.
 		add_shortcode( 'wbc_grid_rezerwacji', array( $this, 'render' ) );
 	}
 

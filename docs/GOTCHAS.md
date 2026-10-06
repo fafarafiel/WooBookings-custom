@@ -49,13 +49,16 @@ cannot be clicked in the first place.
 
 ## WordPress and WooCommerce Bookings
 
-**Availability caching is asymmetric.** Creating a booking clears the transient. Deleting,
-cancelling, refunding and cron expiry do not.
+**Availability caching has three gaps on a shared resource.** Creating, cancelling, refunding,
+trashing and restoring a booking clear every product on the resource. Cron expiry of an abandoned cart and a
+permanent delete of a booking that was never trashed clear at most the booking's own product, and
+a product save clears only that product.
 
 **The cart expiry cron bypasses the data store.** It calls `wp_delete_post()` directly, so the
 vendor's own delete action never fires. The post type is not routed to the trash either, so
-`trashed_post` is silent. `before_delete_post` is the only hook that sees it, and it has to be
-`before`: after deletion `get_post_type()` returns false and a type guard rejects the call.
+`trashed_post` is silent. The hook that catches it has to fire before the row is removed
+(`before_delete_post` here, or core's `delete_post`): after deletion `get_post_type()` returns
+false and a type guard rejects the call.
 
 **The displayed seat count does not pass through `get_available_quantity`.** Display and enforcement
 are separate paths. Cap one and the grid disagrees with the checkout.
@@ -65,8 +68,8 @@ a migration nudge written that way never runs. The public entry points are `mayb
 `maybe_update()`.
 
 **The bookings REST list endpoint under-reports.** Build availability from the slots endpoint
-instead. The products endpoint accepts only a handful of fields on write and silently ignores
-availability, persons and pricing.
+instead. The products endpoint writes availability, pricing and person settings, but not person types or
+resources.
 
 **Multilingual duplication is unconditional.** Marking a product non-translatable does not stop it.
 Removing the callback does, and the removal has to run after the other plugin has registered it.

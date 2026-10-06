@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name:       WooBookings Custom
- * Description:       Companion plugin for WooCommerce Bookings. Renders a day-strip booking grid, adds special events with their own capacity and whole-evening exclusivity, assigns a host per recurring slot, disarms WPML booking duplication and flushes vendor caches on the paths the vendor misses. Touches no vendor file.
- * Version:           1.0.0
+ * Description:       Companion plugin for WooCommerce Bookings. Renders a day-strip booking grid with per-person-type counters and prices, adds special events with their own capacity and whole-evening exclusivity, assigns a host per recurring slot with dated exceptions for a single day, shows product and host images in the session details, disarms WPML booking duplication and flushes vendor caches on the paths the vendor misses. Touches no vendor file.
+ * Version:           1.3.0
  * Requires at least: 6.4
  * Requires PHP:      8.2
  * Author:            iD4
@@ -17,7 +17,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'WOOBOOKINGS_CUSTOM_VERSION', '1.0.0' );
+define( 'WOOBOOKINGS_CUSTOM_VERSION', '1.3.0' );
 define( 'WOOBOOKINGS_CUSTOM_FILE', __FILE__ );
 define( 'WOOBOOKINGS_CUSTOM_PATH', plugin_dir_path( __FILE__ ) );
 define( 'WOOBOOKINGS_CUSTOM_URL', plugin_dir_url( __FILE__ ) );
@@ -76,10 +76,10 @@ function woobookings_custom_missing_deps_notice() {
 /**
  * Bootstrap.
  *
- * Priority 20 on plugins_loaded is load-bearing: WooCommerce Multilingual registers its booking
- * duplication hook at the default priority, and the WPML guard removes that callback. Running
- * earlier would call remove_action() against a callback that does not exist yet, which fails
- * silently and leaves the duplication in place.
+ * Priority 20 on plugins_loaded runs after the plugins that finish loading at the default priority.
+ * The WPML guard does not rely on it: WooCommerce Multilingual adds its booking duplication hook
+ * later still, during its own init, so the guard removes that callback on wp_loaded (see
+ * WBC_WPML_Guard). Removing it any earlier would be a silent no-op.
  */
 function woobookings_custom_bootstrap() {
 	if ( ! class_exists( 'WooCommerce' ) || ! class_exists( 'WC_Bookings' ) ) {
@@ -93,12 +93,15 @@ function woobookings_custom_bootstrap() {
 	require_once WOOBOOKINGS_CUSTOM_PATH . 'includes/class-wbc-cost.php';
 	require_once WOOBOOKINGS_CUSTOM_PATH . 'includes/class-wbc-settings.php';
 	require_once WOOBOOKINGS_CUSTOM_PATH . 'includes/class-wbc-event-fields.php';
+	require_once WOOBOOKINGS_CUSTOM_PATH . 'includes/class-wbc-event-review.php';
+	require_once WOOBOOKINGS_CUSTOM_PATH . 'includes/class-wbc-image.php';
 	require_once WOOBOOKINGS_CUSTOM_PATH . 'includes/class-wbc-hosts.php';
 	require_once WOOBOOKINGS_CUSTOM_PATH . 'includes/class-wbc-host-fields.php';
 	require_once WOOBOOKINGS_CUSTOM_PATH . 'includes/class-wbc-grid-data.php';
 	require_once WOOBOOKINGS_CUSTOM_PATH . 'includes/class-wbc-grid-shortcode.php';
 	require_once WOOBOOKINGS_CUSTOM_PATH . 'includes/class-wbc-events.php';
 	require_once WOOBOOKINGS_CUSTOM_PATH . 'includes/class-wbc-hold.php';
+	require_once WOOBOOKINGS_CUSTOM_PATH . 'includes/class-wbc-vendor-strings.php';
 	require_once WOOBOOKINGS_CUSTOM_PATH . 'includes/class-wbc-booking-plugin.php';
 
 	WBC_Plugin::instance();

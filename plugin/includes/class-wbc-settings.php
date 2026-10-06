@@ -8,7 +8,7 @@
 defined( 'ABSPATH' ) || exit;
 
 /**
- * A WooCommerce sub-page ("Rezerwacja WooBookings Custom") exposing the resource anchor and optional product
+ * A WooCommerce sub-page ("WooBookings Custom") exposing the resource anchor and optional product
  * overrides. Empty overrides fall back to discovery. Gated on manage_woocommerce; saves through
  * the Settings API (core nonce), each field sanitized to an int.
  */
@@ -32,6 +32,7 @@ final class WBC_Settings {
 		add_action( 'admin_notices', array( $this, 'unconfigured_notice' ) );
 		add_action( 'admin_notices', array( $this, 'event_misconfig_notice' ) );
 		add_action( 'admin_notices', array( $this, 'exclusivity_notice' ) );
+		add_action( 'admin_notices', array( $this, 'config_health_notice' ) );
 	}
 
 	/**
@@ -59,7 +60,7 @@ final class WBC_Settings {
 
 		printf(
 			'<div class="notice notice-error"><p><strong>%s</strong> %s</p><p><a class="button button-primary" href="%s">%s</a></p></div>',
-			esc_html__( 'Rezerwacja WooBookings Custom:', 'woobookings-custom' ),
+			esc_html__( 'WooBookings Custom:', 'woobookings-custom' ),
 			esc_html__( 'the plugin has no shared resource configured, or finds no product bound to it. The booking grid is empty and cache flushing does nothing.', 'woobookings-custom' ),
 			esc_url( $url ),
 			esc_html__( 'Configure the resource', 'woobookings-custom' )
@@ -68,7 +69,7 @@ final class WBC_Settings {
 
 	/**
 	 * Warn about mis-configured events. Iterates
-	 * products carrying the event-capacity meta DIRECTLY (meta_query), NOT get_product_ids(): that
+	 * products carrying the event-capacity meta OR the special-event marker DIRECTLY (meta_query), NOT get_product_ids(): that
 	 * list is the discovery output and by construction only holds products already pinned to the
 	 * anchor resource, so an "event without a resource" — the exact failure this must catch — would
 	 * never appear in it and the notice would stay silent. A ghost event (cap > resource qty, or
@@ -99,11 +100,17 @@ final class WBC_Settings {
 				'fields'           => 'ids',
 				'suppress_filters' => true,
 				'meta_query'       => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+					'relation' => 'OR',
 					array(
 						'key'     => WBC_Config::META_EVENT_CAPACITY,
 						'value'   => 0,
 						'compare' => '>',
 						'type'    => 'NUMERIC',
+					),
+					// Since v1.1.0 whole-evening exclusivity has its own marker; validate it in the same loop.
+					array(
+						'key'   => WBC_Config::META_IS_EVENT,
+						'value' => '1',
 					),
 				),
 			)
@@ -120,20 +127,35 @@ final class WBC_Settings {
 				continue;
 			}
 
-			$cap  = (int) get_post_meta( $pid, WBC_Config::META_EVENT_CAPACITY, true );
-			$name = $product->get_name();
+			$cap        = (int) get_post_meta( $pid, WBC_Config::META_EVENT_CAPACITY, true );
+			$raw_marker = ( '1' === (string) get_post_meta( $pid, WBC_Config::META_IS_EVENT, true ) );
+			$name       = $product->get_name();
 
-			// The cap meta was found on the RAW product by the meta_query above, but every runtime
-			// reader (is_event / get_event_capacity and the three Faza-2 filters) resolves it on the
-			// CANONICAL PL product, and WCML does not copy this meta onto translations. A cap set on an
-			// EN/DE translation instead of the PL original therefore passes the meta_query yet reads
-			// back as zero at runtime: the event silently degrades to a plain 18-seat ceremony with no
-			// cap and no whole-evening blackout. is_event() canonicalizes, so a raw-meta product it
-			// reports as NOT an event is exactly this misplacement, the quiet failure this notice exists
-			// to kill. Shout instead of shipping a silently broken event.
-			if ( ! $this->config->is_event( $pid ) ) {
+			// Both metas were found on the RAW product by the meta_query above, but every runtime
+			// reader (is_event / get_event_capacity / is_special_event and the three event filters)
+			// resolves them on the CANONICAL source-language product, and WCML does not copy them onto
+			// translations. A value set on a translation instead of the source product therefore
+			// passes the meta_query yet reads back as empty at runtime: the cap silently vanishes, or
+			// the event never blacks out the evening. The canonicalizing readers report such a product
+			// as NOT capped / NOT special, exactly the misplacement this notice exists to catch. Shout
+			// instead of shipping a silently broken event.
+			// Open entry is checked on the RAW product (like render_field), not through the type map:
+			// the map only knows canonical products and would call a translated open-entry product a
+			// regular session, pointing the editor at the wrong advice.
+			$raw_is_flex = method_exists( $product, 'get_duration_type' ) && 'customer' === $product->get_duration_type();
+			if ( $raw_marker && $raw_is_flex ) {
 				/* translators: %s: product name */
-				$problems[] = sprintf( __( '"%s": event capacity is set on a translation instead of the source product. The plugin reads capacity from the source, so this event applies neither its seat limit nor its exclusivity. Set the capacity on the source-language product.', 'woobookings-custom' ), $name );
+				$problems[] = sprintf( __( '"%s": "Special event" is ticked on an open-entry product, which cannot block the evening. Untick the field.', 'woobookings-custom' ), $name );
+				continue;
+			}
+			if ( $raw_marker && ! $this->config->is_special_event( $pid ) ) {
+				/* translators: %s: product name */
+				$problems[] = sprintf( __( '"%s": "Special event" is ticked on a translation instead of the source product. The plugin reads the marker from the source, so this event will not block the evening. Tick it on the source-language product.', 'woobookings-custom' ), $name );
+				continue;
+			}
+			if ( $cap > 0 && ! $this->config->is_event( $pid ) ) {
+				/* translators: %s: product name */
+				$problems[] = sprintf( __( '"%s": event capacity is set on a translation instead of the source product. The plugin reads capacity from the source, so the seat limit will not apply. Set the capacity on the source-language product.', 'woobookings-custom' ), $name );
 				continue;
 			}
 
@@ -167,7 +189,7 @@ final class WBC_Settings {
 
 			// An event with a cap but no product-level "bookable=yes" availability contributes zero
 			// blackout ranges, so whole-evening exclusivity silently vanishes while the cap still
-			// enforces (impl-review Faza 2, MEDIUM). "Unconfigured must be loud" — flag it.
+			// enforces. "Unconfigured must be loud", so flag it.
 			$has_bookable_window = false;
 			if ( method_exists( $product, 'get_availability' ) ) {
 				foreach ( (array) $product->get_availability() as $entry ) {
@@ -178,8 +200,11 @@ final class WBC_Settings {
 				}
 			}
 			if ( ! $has_bookable_window ) {
-				/* translators: %s: product name */
-				$problems[] = sprintf( __( '"%s": the event has no bookable availability rule, so it will not block regular sessions or open entry in its slot.', 'woobookings-custom' ), $name );
+				$problems[] = $this->config->is_special_event( $pid )
+					/* translators: %s: product name */
+					? sprintf( __( '"%s": the event has no bookable availability rule, so it will not block regular sessions or open entry in its slot.', 'woobookings-custom' ), $name )
+					/* translators: %s: product name */
+					: sprintf( __( '"%s": the product has no bookable availability rule, so it will not appear in the grid.', 'woobookings-custom' ), $name );
 			}
 		}
 
@@ -259,7 +284,7 @@ final class WBC_Settings {
 	 *       rule entirely — the blackout wipes the open product for the whole day, silently.
 	 * Coverage is judged ONLY between rules of the same day scope (plain time↔plain time, or
 	 * time:N↔time:N with the same N). Multiple rules, rrule/custom types or mismatched day
-	 * scopes get no verdict — a false alarm would train Anna to ignore the notice.
+	 * scopes get no verdict — a false alarm would train the shop owner to ignore the notice.
 	 *
 	 * Screen-gated via get_current_screen (unlike the two legacy notices above — deliberate):
 	 * this validation loads products and parses rules, so it runs only where the configuration
@@ -290,7 +315,9 @@ final class WBC_Settings {
 
 		$problems = array();
 		foreach ( $this->config->get_product_ids() as $pid ) {
-			if ( $this->config->is_event( $pid ) || 'ceremony' !== $this->config->get_product_type( $pid ) ) {
+			// Special events (the marker, not capacity, since regular sessions may have a capacity)
+			// are skipped: their exclusivity is by definition. Only regular sessions are checked.
+			if ( $this->config->is_special_event( $pid ) || 'ceremony' !== $this->config->get_product_type( $pid ) ) {
 				continue;
 			}
 			$ceremony = wc_get_product( $pid );
@@ -301,7 +328,7 @@ final class WBC_Settings {
 			$cer_entries = $this->bookable_yes_entries( $ceremony );
 
 			if ( empty( $cer_entries ) ) {
-				/* translators: %s: ceremony product name */
+				/* translators: %s: session product name */
 				$problems[] = sprintf( __( '"%s": the session has no bookable availability rule, so the exclusivity that replaces open entry has nothing to derive from. Open entry stays bookable during the session.', 'woobookings-custom' ), $ceremony->get_name() );
 				continue;
 			}
@@ -312,7 +339,7 @@ final class WBC_Settings {
 			}
 			if ( $this->covers_entire_window( $cer_entries[0], $flex_entries[0] ) ) {
 				$problems[] = sprintf(
-					/* translators: 1: ceremony product name, 2: ceremony rule from, 3: ceremony rule to, 4: open product name, 5: open rule from, 6: open rule to */
+					/* translators: 1: session product name, 2: session rule from, 3: session rule to, 4: open product name, 5: open rule from, 6: open rule to */
 					__( '"%1$s": the session rule (%2$s to %3$s) covers the entire open-entry window of "%4$s" (%5$s to %6$s). Open entry is suppressed completely and nobody can book it.', 'woobookings-custom' ),
 					$ceremony->get_name(),
 					(string) $cer_entries[0]['from'],
@@ -339,6 +366,270 @@ final class WBC_Settings {
 			esc_html__( 'check the availability rules of the products below:', 'woobookings-custom' ),
 			$items // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- each item escaped above.
 		);
+	}
+
+	/**
+	 * Configuration health of the booking products (misconfiguration must be loud).
+	 * Each section validates one feature and reports independently of the others:
+	 * person-type pricing (v1.2) and dated host exceptions (v1.3).
+	 *
+	 * Screen-gated like exclusivity_notice — it loads every booking product.
+	 *
+	 * @return void
+	 */
+	public function config_health_notice() {
+		if ( ! current_user_can( self::CAPABILITY ) || ! function_exists( 'get_current_screen' ) || ! function_exists( 'wc_get_product' ) ) {
+			return;
+		}
+		$screen  = get_current_screen();
+		$allowed = array( 'product', 'edit-product', 'woocommerce_page_' . self::PAGE_SLUG );
+		if ( ! is_object( $screen ) || ! in_array( $screen->id, $allowed, true ) ) {
+			return;
+		}
+
+		$problems = array_merge(
+			$this->check_person_pricing( $this->booking_product_ids() ),
+			$this->check_host_exceptions( $this->booking_product_ids() )
+		);
+
+		foreach ( array( 'error', 'warning' ) as $level ) {
+			$items = '';
+			foreach ( $problems as $problem ) {
+				if ( $level === $problem['level'] ) {
+					$items .= '<li>' . esc_html( $problem['text'] ) . '</li>';
+				}
+			}
+			if ( '' === $items ) {
+				continue;
+			}
+			printf(
+				'<div class="notice notice-%s"><p><strong>%s</strong> %s</p><ul style="list-style:disc;margin-left:2em;">%s</ul></div>',
+				esc_attr( $level ),
+				esc_html__( 'WooBookings Custom, product configuration:', 'woobookings-custom' ),
+				'error' === $level
+					? esc_html__( 'these settings produce a wrong price or block booking:', 'woobookings-custom' )
+					: esc_html__( 'check these settings:', 'woobookings-custom' ),
+				$items // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- each item escaped above.
+			);
+		}
+	}
+
+	/**
+	 * Every product the health checks must see: published, draft and private, in every
+	 * language. NOT get_product_ids() — that is the discovery output and only holds published
+	 * canonical products, so a draft copy or a translation would be invisible.
+	 *
+	 * @return int[]
+	 */
+	private function booking_product_ids() {
+		static $ids = null;
+		if ( null === $ids ) {
+			$ids = array_map(
+				'intval',
+				get_posts(
+					array(
+						'post_type'        => 'product',
+						'post_status'      => array( 'publish', 'draft', 'private' ),
+						'posts_per_page'   => -1,
+						'fields'           => 'ids',
+						'suppress_filters' => true,
+						// Only bookable products: the notice runs on every product screen load.
+						'tax_query'        => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_tax_query
+							array(
+								'taxonomy' => 'product_type',
+								'field'    => 'slug',
+								'terms'    => 'booking',
+							),
+						),
+					)
+				)
+			);
+		}
+		return $ids;
+	}
+
+	/**
+	 * Person-type pricing that the grid cannot sell correctly.
+	 *
+	 * With the person cost multiplier Bookings multiplies the product/resource cost by the head
+	 * count AND adds each type's own cost on top (cost-calculation.php:311-315). A type price
+	 * next to a non-zero product price is therefore charged twice: 2 adults + 1 child at
+	 * 100/50 with a 100 block cost = 550 instead of 250.
+	 *
+	 * @param int[] $ids Product IDs to validate.
+	 * @return array<int,array{level:string,text:string}>
+	 */
+	public function check_person_pricing( array $ids ) {
+		$problems = array();
+
+		foreach ( $ids as $pid ) {
+			$product = wc_get_product( $pid );
+			if ( ! is_object( $product ) || ! is_a( $product, 'WC_Product_Booking' ) || ! $product->has_person_types() ) {
+				continue;
+			}
+
+			$name  = $product->get_name();
+			$types = (array) $product->get_person_types();
+
+			// Bookings reads persons only with "Has persons" on (wc-bookings-functions.php:1576):
+			// the grid would show type prices, the cart would ignore the types and charge the
+			// product price, which is 0 on a product configured for person-type pricing.
+			if ( ! $product->get_has_persons() ) {
+				$problems[] = array(
+					'level' => 'error',
+					/* translators: %s: product name */
+					'text'  => sprintf( __( '"%s": "Has person types" is on but "Has persons" is off, so the cart ignores person types and prices the booking without them. Turn on "Has persons" or turn off person types.', 'woobookings-custom' ), $name ),
+				);
+				continue;
+			}
+
+			if ( empty( $types ) ) {
+				$problems[] = array(
+					'level' => 'error',
+					/* translators: %s: product name */
+					'text'  => sprintf( __( '"%s": person types are on but the product has no type, so customers cannot book it. Add person types or turn the field off.', 'woobookings-custom' ), $name ),
+				);
+				continue;
+			}
+
+			$priced = false;
+			foreach ( $types as $type ) {
+				if ( ! is_object( $type ) ) {
+					continue;
+				}
+				if ( (float) $type->get_cost() > 0 || (float) $type->get_block_cost() > 0 ) {
+					$priced = true;
+					continue;
+				}
+				$problems[] = array(
+					'level' => 'warning',
+					/* translators: 1: product name, 2: person type name */
+					'text'  => sprintf( __( '"%1$s": person type "%2$s" has a price of 0.', 'woobookings-custom' ), $name, $type->get_name() ),
+				);
+			}
+
+			if ( ! $priced ) {
+				continue;
+			}
+
+			if ( $product->get_has_person_cost_multiplier() && $this->has_shared_cost( $product ) ) {
+				$problems[] = array(
+					'level' => 'error',
+					/* translators: %s: product name */
+					'text'  => sprintf( __( '"%s": the price is charged twice. Person types have their own prices, and the product also has a base, block or resource cost or Costs table rules, multiplied by the number of people. With prices on person types, set the product costs to 0.', 'woobookings-custom' ), $name ),
+				);
+			}
+
+			if ( (float) $product->get_price() <= 0 ) {
+				$problems[] = array(
+					'level' => 'warning',
+					/* translators: %s: product name */
+					'text'  => sprintf( __( '"%s": the shop shows a price of 0 although person types have prices. Save the product again so WooCommerce recalculates the displayed price.', 'woobookings-custom' ), $name ),
+				);
+			}
+		}
+
+		return $problems;
+	}
+
+	/**
+	 * Dated host exceptions the grid cannot honour.
+	 *
+	 * Error: the exceptions sit on a translation, but the runtime reads the canonical product only
+	 * (the same class as the event-capacity misplacement).
+	 * Warning: upcoming exceptions whose time the weekly schedule no longer has (orphans) — the
+	 * card silently shows the weekly host for them.
+	 *
+	 * @param int[] $ids Product IDs to validate.
+	 * @return array<int,array{level:string,text:string}>
+	 */
+	public function check_host_exceptions( array $ids ) {
+		$problems = array();
+		$guard    = WBC_Plugin::instance()->get_wpml_guard();
+		$today    = WBC_Config::today_midnight()->format( 'Y-m-d' );
+
+		foreach ( $ids as $pid ) {
+			$saved = get_post_meta( (int) $pid, WBC_Config::META_HOST_EXCEPTIONS, true );
+			if ( ! is_array( $saved ) || empty( $saved ) ) {
+				continue;
+			}
+			$product = wc_get_product( $pid );
+			if ( ! is_object( $product ) ) {
+				continue;
+			}
+			$name = $product->get_name();
+
+			$canonical = $guard->wbc_canonical_id( (int) $pid );
+			if ( $canonical !== (int) $pid ) {
+				// A WPML copy that mirrors the original is harmless; only data that exists ONLY on
+				// the translation is invisible to the runtime.
+				// Only upcoming entries count: the original drops past dates on every save, a stale
+				// copy would otherwise differ forever.
+				$upcoming     = static function ( $map ) use ( $today ) {
+					$out = array();
+					foreach ( is_array( $map ) ? $map : array() as $k => $v ) {
+						if ( substr( (string) $k, 0, 10 ) >= $today ) {
+							$out[ (string) $k ] = (int) $v;
+						}
+					}
+					ksort( $out );
+					return $out;
+				};
+				$mine = $upcoming( $saved );
+				if ( empty( $mine ) || $mine === $upcoming( get_post_meta( $canonical, WBC_Config::META_HOST_EXCEPTIONS, true ) ) ) {
+					continue;
+				}
+				$problems[] = array(
+					'level' => 'error',
+					/* translators: %s: product name */
+					'text'  => sprintf( __( '"%s": host exceptions are saved on a translation instead of the source product, so the grid will not see them. Set them on the source-language product.', 'woobookings-custom' ), $name ),
+				);
+				continue;
+			}
+
+			$by_day  = WBC_Host_Fields::times_by_weekday( WBC_Host_Fields::weekly_slots( $product ) );
+			$hosts   = WBC_Plugin::instance()->get_hosts();
+			$orphans = 0;
+			foreach ( $saved as $key => $host_id ) {
+				if ( ! preg_match( '/^(\d{4}-\d{2}-\d{2})\|(\d{2}:\d{2})$/', (string) $key, $m ) || $m[1] < $today ) {
+					continue;
+				}
+				$weekday = WBC_Host_Fields::weekday_of( $m[1] );
+				if ( ! isset( $by_day[ $weekday ] ) || ! in_array( $m[2], $by_day[ $weekday ], true ) || null === $hosts->get_host( (int) $host_id ) ) {
+					++$orphans;
+				}
+			}
+			if ( $orphans > 0 ) {
+				$problems[] = array(
+					'level' => 'warning',
+					/* translators: 1: product name, 2: number of exceptions */
+					'text'  => sprintf( __( '"%1$s": %2$d host exception(s) the site will not show (a time outside the schedule or an unavailable person). On those days the weekly host is shown; fix or remove the exception.', 'woobookings-custom' ), $name, $orphans ),
+				);
+			}
+		}
+
+		return $problems;
+	}
+
+	/**
+	 * Whether the product carries a cost the engine multiplies by the head count: product base
+	 * or block cost, any cost rule, or a resource cost.
+	 *
+	 * @param object $product WC_Product_Booking.
+	 * @return bool
+	 */
+	private function has_shared_cost( $product ) {
+		if ( (float) $product->get_cost() > 0 || (float) $product->get_block_cost() > 0 || ! empty( $product->get_costs() ) ) {
+			return true;
+		}
+		if ( $product->has_resources() ) {
+			foreach ( (array) $product->get_resources() as $resource ) {
+				if ( is_object( $resource ) && ( (float) $resource->get_base_cost() > 0 || (float) $resource->get_block_cost() > 0 ) ) {
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -391,7 +682,7 @@ final class WBC_Settings {
 
 		// Judge only plain forward windows. A reverse rule (to < from = overnight, vendor-legal:
 		// "Reverse time rule", rule-manager :1170) leaves real bookable hours after midnight that
-		// this containment test cannot see — no verdict, never a false alarm (impl-review Fazy 2).
+		// this containment test cannot see — no verdict, never a false alarm.
 		if ( $covering_from >= $covering_to || $covered_from >= $covered_to ) {
 			return false;
 		}
@@ -421,8 +712,8 @@ final class WBC_Settings {
 	public function register_menu() {
 		add_submenu_page(
 			'woocommerce',
-			__( 'Rezerwacja WooBookings Custom', 'woobookings-custom' ),
-			__( 'Rezerwacja WooBookings Custom', 'woobookings-custom' ),
+			__( 'WooBookings Custom', 'woobookings-custom' ),
+			__( 'WooBookings Custom', 'woobookings-custom' ),
 			self::CAPABILITY,
 			self::PAGE_SLUG,
 			array( $this, 'render_page' )
@@ -479,8 +770,8 @@ final class WBC_Settings {
 		);
 
 		$this->add_field( WBC_Config::OPTION_RESOURCE, __( 'Shared resource ID', 'woobookings-custom' ) );
-		$this->add_field( WBC_Config::OPTION_FLEX, __( 'ID produktu „wynajem/flex" (puste = discovery)', 'woobookings-custom' ) );
-		$this->add_field( WBC_Config::OPTION_CEREMONY, __( 'ID produktu „ceremonia" (puste = discovery)', 'woobookings-custom' ) );
+		$this->add_field( WBC_Config::OPTION_FLEX, __( 'Flexible rental product ID (empty = detect automatically)', 'woobookings-custom' ) );
+		$this->add_field( WBC_Config::OPTION_CEREMONY, __( 'Session product ID (empty = detect automatically)', 'woobookings-custom' ) );
 
 		add_settings_field(
 			WBC_Config::OPTION_HORIZON,
@@ -568,7 +859,7 @@ final class WBC_Settings {
 		}
 
 		echo '<div class="wrap">';
-		echo '<h1>' . esc_html__( 'Rezerwacja WooBookings Custom — konfiguracja', 'woobookings-custom' ) . '</h1>';
+		echo '<h1>' . esc_html__( 'WooBookings Custom settings', 'woobookings-custom' ) . '</h1>';
 
 		echo '<form action="options.php" method="post">';
 		settings_fields( self::OPTION_GROUP );
@@ -578,11 +869,11 @@ final class WBC_Settings {
 
 		$product_ids = $this->config->get_product_ids();
 		echo '<hr />';
-		echo '<h2>' . esc_html__( 'Co widzi grid', 'woobookings-custom' ) . '</h2>';
+		echo '<h2>' . esc_html__( 'What the grid sees', 'woobookings-custom' ) . '</h2>';
 		echo '<p><strong>' . esc_html__( 'Resource:', 'woobookings-custom' ) . '</strong> ' . esc_html( (string) $this->config->get_resource_id() ) . '</p>';
-		echo '<p><strong>' . esc_html__( 'Produkty (kanon PL):', 'woobookings-custom' ) . '</strong> ' . esc_html( implode( ', ', array_map( 'strval', $product_ids ) ) ) . '</p>';
+		echo '<p><strong>' . esc_html__( 'Products (source language):', 'woobookings-custom' ) . '</strong> ' . esc_html( implode( ', ', array_map( 'strval', $product_ids ) ) ) . '</p>';
 		echo '<p><strong>' . esc_html__( 'Flex:', 'woobookings-custom' ) . '</strong> ' . esc_html( (string) $this->config->get_flex_product_id() );
-		echo ' &nbsp; <strong>' . esc_html__( 'Ceremonia:', 'woobookings-custom' ) . '</strong> ' . esc_html( (string) $this->config->get_ceremony_product_id() ) . '</p>';
+		echo ' &nbsp; <strong>' . esc_html__( 'Session:', 'woobookings-custom' ) . '</strong> ' . esc_html( (string) $this->config->get_ceremony_product_id() ) . '</p>';
 
 		echo '</div>';
 	}

@@ -11,7 +11,7 @@ defined( 'ABSPATH' ) || exit;
 
 /**
  * Reads the resource anchor from an option and discovers the flex + ceremony products sharing it.
- * All returned IDs are canonical PL. Getters are memoized (cheap on the hot path).
+ * All returned IDs are canonical. Getters are memoized (cheap on the hot path).
  */
 final class WBC_Config {
 
@@ -26,13 +26,23 @@ final class WBC_Config {
 	const HORIZON_MAX     = 12;
 
 	/*
-	 * Postmeta marking a bookable product as a special event with its own seat cap (e.g. 12 vs the
-	 * standard ceremony's 18). Its PRESENCE with a positive value means "this is an event"; its
-	 * value is the single source of the capacity cap read by both runtime filters (slice 3, Faza 2).
+	 * Postmeta carrying a product's own seat cap (e.g. 10 on a 20-seat resource). Its value is the
+	 * single source of the capacity cap read by both runtime filters. Since v1.1.0 it says nothing
+	 * about exclusivity: regular sessions may carry a cap too; see META_IS_EVENT.
 	 * Not a product ID and not a taxonomy term (a category would be WPML-translated and break the
-	 * marker under EN/DE) — a hidden postmeta (leading underscore) travels on the canonical product.
+	 * marker in other languages) — a hidden postmeta (leading underscore) travels on the canonical product.
 	 */
 	const META_EVENT_CAPACITY = '_woobookings_custom_event_capacity';
+
+	/*
+	 * Special event = whole-evening exclusivity (tier 3 in WBC_Events). A separate marker, NOT the
+	 * capacity: once regular sessions carry META_EVENT_CAPACITY too, "has a capacity" no longer
+	 * means "is an event". If the tier still followed capacity, a new event would share the tier
+	 * of a regular session and could not block it. Capacity stays the source of the seat limit;
+	 * this marker is the source of the blackout. Value `1` on the canonical product, like every
+	 * meta of this plugin.
+	 */
+	const META_IS_EVENT = '_woobookings_custom_is_event';
 
 	/**
 	 * Session host. Both meta keys live on the CANONICAL product, exactly like event capacity:
@@ -48,6 +58,24 @@ final class WBC_Config {
 	 */
 	const META_HOST_DEFAULT = '_woobookings_custom_host_default';
 	const META_HOST_MAP     = '_woobookings_custom_host_map';
+
+	/*
+	 * Dated exceptions: a different person on ONE specific day, key `YYYY-MM-DD|HH:MM`, value = ID
+	 * of the person in the host registry. They take precedence over MAP and DEFAULT. Past entries
+	 * are dropped when the product is saved and never reach the front end.
+	 */
+	const META_HOST_EXCEPTIONS = '_woobookings_custom_host_exceptions';
+
+	/**
+	 * Today's midnight in the WordPress time zone: one source for the grid, the exception save and
+	 * the validator.
+	 *
+	 * @return DateTimeImmutable
+	 */
+	public static function today_midnight() {
+		$today = new DateTimeImmutable( 'now', wp_timezone() );
+		return $today->setTime( 0, 0, 0 );
+	}
 
 	/*
 	 * No resource default. A staging ID as fallback (this used to be 848) fails silently on any
@@ -68,6 +96,9 @@ final class WBC_Config {
 
 	/** @var array<int,int> canonical id => event capacity (0 = not an event); per-request memo */
 	private $event_caps = array();
+
+	/** @var array<int,bool> canonical id => special-event marker; per-request memo */
+	private $special_events = array();
 
 	/**
 	 * @param WBC_WPML_Guard $wpml_guard
@@ -118,7 +149,7 @@ final class WBC_Config {
 	}
 
 	/**
-	 * Canonical PL IDs of the bookable products on the resource. Option first; on miss, discover
+	 * Canonical IDs of the bookable products on the resource. Option first; on miss, discover
 	 * by resource and cache the result.
 	 *
 	 * @return int[]
@@ -134,9 +165,9 @@ final class WBC_Config {
 		/*
 		 * The cache is stamped with the resource it was discovered for. Without that stamp this
 		 * option is a cache with no invalidation, and the cutover sequence walks straight into it:
-		 * set resource_id BEFORE creating the ceremony product and discovery freezes [320] forever
-		 * is_configured() would then report true, the misconfiguration notice would go quiet, and the grid would ship
-		 * without ceremonies. A stale stamp must lose to a re-discovery, never win.
+		 * set resource_id BEFORE creating the ceremony product and discovery freezes a list without
+		 * it forever. is_configured() would then report true, the misconfiguration notice would go
+		 * quiet, and the grid would ship without ceremonies. A stale stamp must lose to a re-discovery, never win.
 		 */
 		if ( isset( $stored['resource'], $stored['ids'] ) && (int) $stored['resource'] === $resource && is_array( $stored['ids'] ) ) {
 			$this->product_ids = array_values( array_unique( array_map( 'intval', $stored['ids'] ) ) );
@@ -163,9 +194,10 @@ final class WBC_Config {
 	 */
 	public function invalidate_products_cache() {
 		delete_option( self::OPTION_PRODUCT_IDS );
-		$this->product_ids = null;
-		$this->types       = null;
-		$this->event_caps  = array();
+		$this->product_ids    = null;
+		$this->types          = null;
+		$this->event_caps     = array();
+		$this->special_events = array();
 	}
 
 	/**
@@ -208,9 +240,9 @@ final class WBC_Config {
 
 	/**
 	 * Event seat cap for a product, or 0 when it is not an event. Always resolved on the CANONICAL
-	 * PL product: the runtime filters (Faza 2) receive the translated product on EN/DE checkout, and
+	 * (default-language) product: the runtime filters receive the translated product on a translated checkout, and
 	 * WPML need not copy this meta to the translation, so reading the raw passed ID would lose the
-	 * cap under EN/DE. Canonicalizing here makes every caller safe regardless of what it passes.
+	 * cap in other languages. Canonicalizing here makes every caller safe regardless of what it passes.
 	 * Memoized per canonical ID (cheap on the hot path).
 	 *
 	 * @param int $id Product ID (any language).
@@ -228,7 +260,9 @@ final class WBC_Config {
 	}
 
 	/**
-	 * Whether a product is a special event (has a positive event capacity meta on its canonical PL).
+	 * Whether a product carries a seat cap (positive event capacity meta on its canonical product).
+	 * Since v1.1.0 this is NOT the exclusivity marker: regular sessions may carry a cap too; see
+	 * is_special_event() for the whole-evening blackout.
 	 *
 	 * @param int $id Product ID (any language).
 	 * @return bool
@@ -238,8 +272,30 @@ final class WBC_Config {
 	}
 
 	/**
+	 * Whether a product is a SPECIAL event — the whole-evening exclusivity marker (META_IS_EVENT),
+	 * independent of the capacity cap. Resolved on the canonical product like every other meta,
+	 * memoized per canonical ID (read on the availability-rules hot path).
+	 *
+	 * @param int $id Product ID (any language).
+	 * @return bool
+	 */
+	public function is_special_event( $id ) {
+		$canonical = $this->wpml_guard->wbc_canonical_id( (int) $id );
+		if ( ! $canonical ) {
+			return false;
+		}
+		if ( ! isset( $this->special_events[ $canonical ] ) ) {
+			// Open entry (flex) is never an event: a marker on it would put it at tier 3 and black
+			// out every regular session. The field is hidden for it, and ignored here.
+			$this->special_events[ $canonical ] = ( 'flex' !== $this->get_product_type( $canonical ) )
+				&& ( '1' === (string) get_post_meta( $canonical, self::META_IS_EVENT, true ) );
+		}
+		return $this->special_events[ $canonical ];
+	}
+
+	/**
 	 * Discover bookable products whose resource set contains the anchor resource. Uses only the
-	 * product API (no raw SQL). Returns canonical PL IDs.
+	 * product API (no raw SQL). Returns canonical IDs.
 	 *
 	 * @param int $resource_id
 	 * @return int[]
@@ -256,9 +312,9 @@ final class WBC_Config {
 		 * Language-agnostic query, mirroring the vendor's own booking-products lookup
 		 * (class-wc-product-booking-data-store-cpt.php:335-358): get_posts with
 		 * suppress_filters => true so WPML does not scope the result set to the current request
-		 * language. wc_get_products() (the old call here) IS WPML-scoped — under EN/DE it returns
+		 * language. wc_get_products() (the old call here) IS WPML-scoped: in another language it returns
 		 * only translated products, so an event that exists in the source language alone
-		 * would never be discovered on the EN/DE grid (kryterium 5). Product types come from the
+		 * would never be discovered on a translated grid. Product types come from the
 		 * vendor helper so an accommodation-booking add-on would be covered too; the object guard
 		 * below still narrows to real WC_Product_Booking instances.
 		 */
@@ -329,7 +385,7 @@ final class WBC_Config {
 	}
 
 	/**
-	 * First product ID of a given type, canonical PL.
+	 * First product ID of a given type, canonical.
 	 *
 	 * @param string $type
 	 * @return int

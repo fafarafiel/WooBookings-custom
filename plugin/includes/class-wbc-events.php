@@ -3,12 +3,15 @@
  * Events. Special-event runtime and the exclusivity hierarchy over the shared resource pool.
  *
  * Two mechanisms:
- *   1. own seat capacity for events (e.g. 12 on the 18-seat pool), driven by the
- *      event-capacity meta (WBC_Config::META_EVENT_CAPACITY) read on the CANONICAL PL product;
- *   2. the exclusivity hierarchy event > ceremonia > open (tiers 3 > 2 > 1): a product's slots
+ *   1. own seat capacity for events (e.g. 10 on the 20-seat resource), driven by the
+ *      event-capacity meta (WBC_Config::META_EVENT_CAPACITY) read on the CANONICAL product;
+ *   2. the exclusivity hierarchy event > session > open (tiers 3 > 2 > 1): a product's slots
  *      are blacked out by the bookable windows of every product with a HIGHER tier. The event
- *      keeps its whole-evening exclusivity (Fin 2026-07-18) as the top tier; the ceremony
- *      replaces the open entry in its own slot (wejscie-open, K3) as the middle one.
+ *      keeps its whole-evening exclusivity as the top tier; a regular session replaces the open
+ *      entry in its own slot as the middle one. Since
+ *      v1.1.0 the top tier comes from the explicit marker (WBC_Config::META_IS_EVENT), not
+ *      from the capacity meta: regular sessions may carry a capacity too, so capacity alone
+ *      no longer says "event".
  *
  * Three vendor filters, verified against the unpacked Bookings 3.7.0 source, NOT guessed
  * Each callback canonicalizes the passed product FIRST: on a translated checkout the
@@ -17,7 +20,7 @@
  *
  *   1. woocommerce_bookings_get_available_quantity (class-wc-product-booking.php:1413,
  *      args: $available_qty, $product, $booking_resource) — cap enforcement. Its return
- *      feeds the add-to-cart form validation (class-wc-booking-form.php:782) and block
+ *      feeds the booking form's free-slot display (class-wc-booking-form.php:782) and block
  *      bookability (class-wc-product-booking.php:1890,2214).
  *   2. woocommerce_bookings_filter_time_slots (wc-bookings-functions.php:1144,
  *      args: $slots, $bookable_product, $args) — cap on the count the grid DISPLAYS. The
@@ -25,7 +28,7 @@
  *      so the grid needs its own cap here. Runs AFTER WC_Bookings_Cache::set (:1110) → cache-safe.
  *   3. woocommerce_booking_get_availability_rules (class-wc-product-booking.php:1569,
  *      args: $rules, $for_resource, $product) — tier blackout. Sits ABOVE the display↔enforcement
- *      split (research wylacznosc-ceremonia-nad-wejsciem-open): both the slots endpoint and the
+ *      split: both the slots endpoint and the
  *      cart validation grow out of get_bookable_minute_blocks_for_date, so one filter covers both.
  *
  * @package WooBookings_Custom
@@ -120,7 +123,7 @@ final class WBC_Events {
 	}
 
 	/**
-	 * Filter 3 — tier blackout (event > ceremonia > open). For a product on the anchor resource,
+	 * Filter 3 — tier blackout (event > session > open). For a product on the anchor resource,
 	 * append bookable=no rules covering every bookable range of every product with a HIGHER tier,
 	 * at the END of the already-sorted rules array so they carry the highest override power. The
 	 * event (tier 3) comes back unchanged — nothing sits above it, so its blackout set is empty,
@@ -158,11 +161,17 @@ final class WBC_Events {
 	 * blacked out by everything with a tier strictly above its own, so the hierarchy
 	 * event > session > open entry falls out of a plain integer comparison.
 	 *
-	 * @param int $canon Canonical PL product ID.
+	 * @param int $canon Canonical product ID.
 	 * @return int
 	 */
 	private function tier( $canon ) {
-		if ( $this->config->is_event( $canon ) ) {
+		/*
+		 * By the MARKER, not by capacity: regular sessions may carry a capacity, so `is_event()`
+		 * would put them all at tier 3 and a new event could block none of them (blackout only
+		 * works downwards). Capacity still limits seats (filters 1 and 2); the tier comes from the
+		 * "Special event" field.
+		 */
+		if ( $this->config->is_special_event( $canon ) ) {
 			return 3;
 		}
 		if ( 'flex' === $this->config->get_product_type( $canon ) ) {

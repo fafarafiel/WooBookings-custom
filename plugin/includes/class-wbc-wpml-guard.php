@@ -18,12 +18,12 @@ final class WBC_WPML_Guard {
 	/** @var int|null Memoized default-language object cache is per-request; keep it simple. */
 	private $default_lang = null;
 
-	/** @var array<int,int> Per-request memo: input id => canonical PL id. Hot path — the availability
+	/** @var array<int,int> Per-request memo: input id => canonical id. Hot path — the availability
 	 * filters (WBC_Events) resolve the canonical id on every get_availability_rules call, and each then
 	 * canonicalizes again inside get_event_capacity, so this caps wpml_object_id dispatch churn. */
 	private $canonical_cache = array();
 
-	/** Callback method WCML hooks onto woocommerce_new_booking to spawn EN/DE copies. */
+	/** Callback method WCML hooks onto woocommerce_new_booking to spawn copies in other languages. */
 	const WCML_DUP_METHOD = 'duplicate_booking_for_translations';
 
 	public function __construct() {

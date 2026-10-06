@@ -2,7 +2,7 @@
 /**
  * Grid data — builds the server payload consumed by grid.js via wp_localize_script.
  *
- * The WPML seam of the whole plasterek: availability axis on canonical PL IDs, user-facing
+ * The WPML seam of the whole feature: availability axis on canonical IDs, user-facing
  * axis (label/description/url) from the translated product for the page language.
  * A booking is never a WPML-re-synced entity.
  *
@@ -63,7 +63,7 @@ final class WBC_Grid_Data {
 			}
 		}
 
-		return array(
+		$payload = array(
 			'restUrl'    => esc_url_raw( rest_url( 'wc-bookings/v1/products/slots' ) ),
 			// WPML resolves the cart page per language, so the toast link lands on /koszyk/,
 			// /en/cart/ or /de/warenkorb/ to match the page.
@@ -89,6 +89,84 @@ final class WBC_Grid_Data {
 			'products'   => $products,
 			'i18n'       => $this->build_i18n(),
 		);
+
+		// Additive key (v1.3): every person named by a dated exception, once. Absent when no
+		// product has exceptions, so the payload of a site without them is unchanged.
+		$hosts_by_id = $this->hosts_by_id( $products );
+		if ( ! empty( $hosts_by_id ) ) {
+			$payload['hostsById'] = $hosts_by_id;
+		}
+
+		return $payload;
+	}
+
+	/**
+	 * Persons referenced by the products' dated exceptions, keyed by ID.
+	 *
+	 * @param array<string,array<string,mixed>> $products Descriptors.
+	 * @return array<string,array{name:string,bio:string,image:array|null}>
+	 */
+	private function hosts_by_id( $products ) {
+		$out = array();
+		if ( ! $this->hosts ) {
+			return $out;
+		}
+		foreach ( $products as $descriptor ) {
+			if ( empty( $descriptor['hostExceptions'] ) ) {
+				continue;
+			}
+			foreach ( $descriptor['hostExceptions'] as $host_id ) {
+				$id = (string) (int) $host_id;
+				if ( ! isset( $out[ $id ] ) ) {
+					$out[ $id ] = $this->hosts->get_host( (int) $host_id );
+				}
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * Dated host exceptions of a product for the navigable window, `{YYYY-MM-DD|HH:MM: hostId}`.
+	 *
+	 * Read off the CANONICAL product, like the weekly map. Only today…horizon end, only
+	 * persons that still exist and only times the weekly schedule still has — an orphan stays
+	 * in the panel (with a warning) but the card falls back to the weekly host.
+	 *
+	 * @param int $canonical_id
+	 * @return array<string,int>
+	 */
+	private function host_exceptions( $canonical_id ) {
+		if ( ! $this->hosts ) {
+			return array();
+		}
+		$saved = get_post_meta( (int) $canonical_id, WBC_Config::META_HOST_EXCEPTIONS, true );
+		if ( ! is_array( $saved ) || empty( $saved ) ) {
+			return array();
+		}
+
+		$today  = $this->today_midnight()->format( 'Y-m-d' );
+		$end    = $this->horizon_end_key();
+		$by_day = WBC_Host_Fields::times_by_weekday( WBC_Host_Fields::weekly_slots( wc_get_product( (int) $canonical_id ) ) );
+
+		$out = array();
+		foreach ( $saved as $key => $host_id ) {
+			if ( ! preg_match( '/^(\d{4}-\d{2}-\d{2})\|(\d{2}:\d{2})$/', (string) $key, $m ) ) {
+				continue;
+			}
+			if ( $m[1] < $today || $m[1] > $end ) {
+				continue;
+			}
+			$weekday = WBC_Host_Fields::weekday_of( $m[1] );
+			if ( ! isset( $by_day[ $weekday ] ) || ! in_array( $m[2], $by_day[ $weekday ], true ) ) {
+				continue;
+			}
+			if ( null === $this->hosts->get_host( (int) $host_id ) ) {
+				continue;
+			}
+			$out[ (string) $key ] = (int) $host_id;
+		}
+		ksort( $out );
+		return $out;
 	}
 
 	/**
@@ -97,15 +175,14 @@ final class WBC_Grid_Data {
 	 * @return DateTimeImmutable
 	 */
 	private function today_midnight() {
-		$today = new DateTimeImmutable( 'now', wp_timezone() );
-		return $today->setTime( 0, 0, 0 );
+		return WBC_Config::today_midnight();
 	}
 
 	/**
 	 * Pure month-forward arithmetic. PHP's native `+N month` overflows the day-of-month
-	 * (Aug 31 + 3 months = Dec 1) — same boundary class as the v1.0.4 off-by-one — so an
+	 * (Aug 31 + 3 months = Dec 1) — a classic boundary off-by-one, so an
 	 * overflow clamps to the last day of the INTENDED target month. Static and WP-free on
-	 * purpose: testable in a bare CLI harness with mocked dates (kryterium 1.1).
+	 * purpose: testable in a bare CLI harness with mocked dates.
 	 *
 	 * @param DateTimeImmutable $today  Base day (midnight).
 	 * @param int               $months Months forward.
@@ -188,7 +265,7 @@ final class WBC_Grid_Data {
 
 	/**
 	 * Genitive month names 1..12 (index 0 = January) for date-range phrases ("12–19 sierpnia").
-	 * PL has a real genitive in WP_Locale; EN/DE fall back to the nominative naturally.
+	 * PL has a real genitive in WP_Locale; languages without one fall back to the nominative.
 	 *
 	 * @return string[]
 	 */
@@ -260,8 +337,8 @@ final class WBC_Grid_Data {
 	}
 
 	/**
-	 * Build one product descriptor. Availability keys on canonical PL; presentation comes from the
-	 * translated product. Missing translation → graceful fallback to canonical (no fatal).
+	 * Build one product descriptor. Availability keys on the canonical product; presentation comes
+	 * from the translated product. Missing translation → graceful fallback to canonical (no fatal).
 	 *
 	 * @param int         $canonical_id
 	 * @param string|null $lang
@@ -281,9 +358,9 @@ final class WBC_Grid_Data {
 		}
 
 		/*
-		 * Numbers are read off the canonical PL product; presentation (label,
+		 * Numbers are read off the canonical product; presentation (label,
 		 * description, url, add-to-cart id) off the translation. The anchor
-		 * resource is untranslatable (pule-jezykowe), so every language product
+		 * resource is not translated, so every language product
 		 * shares one resource and a translation resolves the same shared resource
 		 * as the canonical. Reading numerically on the canonical keeps the grid
 		 * language-independent either way — defensive, not required by the data.
@@ -294,9 +371,17 @@ final class WBC_Grid_Data {
 		}
 
 		$type        = $this->config->get_product_type( $canonical_id );
-		$min_persons = $this->int_call( $canonical_product, 'get_min_persons', 1 );
-		$max_persons = $this->int_call( $canonical_product, 'get_max_persons', $this->int_call( $canonical_product, 'get_qty', 18 ) );
+		$has_persons = method_exists( $canonical_product, 'has_persons' ) && $canonical_product->has_persons();
+		// A party is never empty: an empty "Min persons" is stored as 0, and Bookings would accept
+		// a booking for nobody at no cost, even on a full slot. Without "Has persons" the head count
+		// is ignored, so the party is one.
+		$min_persons = $has_persons ? max( 1, $this->int_call( $canonical_product, 'get_min_persons', 1 ) ) : 1;
 		$capacity    = $this->resource_capacity( $canonical_product );
+		$max_persons = self::party_max(
+			$this->int_call( $canonical_product, 'get_max_persons', $this->int_call( $canonical_product, 'get_qty', 18 ) ),
+			$capacity,
+			$has_persons
+		);
 
 		$descriptor = array(
 			'id'              => (int) $canonical_id,
@@ -304,6 +389,7 @@ final class WBC_Grid_Data {
 			'type'            => $type,
 			'label'           => $product->get_name(),
 			'description'     => $this->clean_text( $product->get_description() ),
+			'image'           => $this->product_image( $product, $canonical_product ),
 			'durationText'    => $this->duration_text( $canonical_product, $type ),
 			'minPersons'      => $min_persons,
 			'maxPersons'      => $max_persons,
@@ -317,7 +403,56 @@ final class WBC_Grid_Data {
 			'hosts'           => $this->host_map( $canonical_id ),
 		);
 
+		// Additive key (v1.3): absent when the product has no dated exceptions.
+		$exceptions = $this->host_exceptions( $canonical_id );
+		if ( ! empty( $exceptions ) ) {
+			$descriptor['hostExceptions'] = $exceptions;
+		}
+
+		// Additive key (v1.2): present only when the product has person types, so an older
+		// grid.js and every product without types see the payload exactly as before.
+		$person_types = $this->person_types( $product, $canonical_product );
+		if ( ! empty( $person_types ) ) {
+			$descriptor['personTypes'] = $person_types;
+		}
+
 		return $descriptor;
+	}
+
+	/**
+	 * Person types for the card's counters, read off the product that RECEIVES the add-to-cart:
+	 * the field name carries that product's own person-type ID. The canonical product is the
+	 * reference for numbers; a divergence (an untranslated price or minimum on a WCML copy) is
+	 * logged and the target product wins, because that is the one the cart will validate against.
+	 *
+	 * @param WC_Product $product           Add-to-cart target (translation or canonical).
+	 * @param WC_Product $canonical_product Canonical (source-language) product.
+	 * @return array<int,array<string,mixed>>
+	 */
+	private function person_types( $product, $canonical_product ) {
+		$types = WBC_Cost::person_type_prices( $product );
+		if ( empty( $types ) || $canonical_product === $product ) {
+			return $types;
+		}
+
+		// A sorted list of the numbers only: type names may be translated on the WCML copy and
+		// the sort order may differ, neither of which is a divergence.
+		$numbers = static function ( $list ) {
+			$out = array();
+			foreach ( $list as $type ) {
+				$out[] = wp_json_encode( array( $type['min'], $type['max'], $type['unitPrice'] ) );
+			}
+			sort( $out );
+			return $out;
+		};
+		$flag = 'wbc_person_types_diverge_' . (int) $product->get_id();
+		if ( $numbers( $types ) !== $numbers( WBC_Cost::person_type_prices( $canonical_product ) ) && ! get_transient( $flag ) ) {
+			// Once a day per product: the payload is built on every page view.
+			set_transient( $flag, 1, DAY_IN_SECONDS );
+			error_log( sprintf( '[woobookings-custom] person types of product %d differ from canonical %d, the card follows the add-to-cart target.', $product->get_id(), $canonical_product->get_id() ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+		}
+
+		return $types;
 	}
 
 	/**
@@ -327,8 +462,8 @@ final class WBC_Grid_Data {
 	 * translation is invisible to the runtime, and that is deliberate: a person's name is one
 	 * string across every language.
 	 *
-	 * @param int $canonical_id ID produktu na kanonie PL.
-	 * @return array{name:string,bio:string}|null
+	 * @param int $canonical_id Product ID in the source language.
+	 * @return array{name:string,bio:string,image:array|null}|null
 	 */
 	private function host_default( $canonical_id ) {
 		if ( ! $this->hosts ) {
@@ -344,8 +479,8 @@ final class WBC_Grid_Data {
 	 * Entries pointing at a deleted or unpublished person are dropped here rather than on the
 	 * front end: the client receives display-ready data only and never needs to know the registry.
 	 *
-	 * @param int $canonical_id ID produktu na kanonie PL.
-	 * @return array<string,array{name:string,bio:string}>
+	 * @param int $canonical_id Product ID in the source language.
+	 * @return array<string,array{name:string,bio:string,image:array|null}>
 	 */
 	private function host_map( $canonical_id ) {
 		if ( ! $this->hosts ) {
@@ -372,18 +507,38 @@ final class WBC_Grid_Data {
 	}
 
 	/**
-	 * Persons control is data-driven (K1): the stepper exists exactly when the Bookings
+	 * Largest party one booking may take. Bookings stores an empty "Max persons" as 0 and, with
+	 * "Has persons" on, treats 0 as no limit (class-wc-product-booking.php:340,2780), so 0 falls
+	 * back to the seat capacity and the grid clamps the party to the seats still free. Without
+	 * "Has persons" Bookings ignores the head count (wc-bookings-functions.php:1576), so the party
+	 * is one whatever the field says.
+	 *
+	 * @param int  $max_persons Product setting, 0 when empty.
+	 * @param int  $capacity    Seats on the shared resource.
+	 * @param bool $has_persons Whether the product counts persons.
+	 * @return int
+	 */
+	public static function party_max( $max_persons, $capacity, $has_persons ) {
+		if ( ! $has_persons ) {
+			return 1;
+		}
+		$max_persons = (int) $max_persons;
+		return $max_persons > 0 ? $max_persons : max( 1, (int) $capacity );
+	}
+
+	/**
+	 * Persons control is data-driven: the stepper exists exactly when the Bookings
 	 * configuration leaves the customer a real choice (min < max). Equal bounds mean the
 	 * count is fixed by configuration — no control, the hidden field carries the value.
 	 * Product type deliberately plays no part here: wp-admin steers the behaviour
-	 * (wymaganie klientki #4), so flipping min/max toggles the stepper without code.
+	 * (a deliberate requirement), so flipping min/max toggles the stepper without code.
 	 *
 	 * @param int $min
 	 * @param int $max
 	 * @return array<string,mixed>
 	 */
 	private function persons_control( $min, $max ) {
-		$min = (int) $min;
+		$min = max( 1, (int) $min );
 		$max = (int) $max;
 
 		if ( $min < $max ) {
@@ -415,8 +570,7 @@ final class WBC_Grid_Data {
 				'step'    => 1,
 				// Real block size in duration units. The select always steps blocks by 1, but the
 				// grid's duration clamp is only valid when one block == one hour == slot spacing;
-				// a 2-hour-block config must disable the clamp, and a hardcoded step can't say so
-				// (impl-review Fazy 2, MEDIUM).
+				// a 2-hour-block config must disable the clamp, and a hardcoded step can't say so.
 				'block'   => $this->int_call( $product, 'get_duration', 1 ),
 				'unit'    => $unit,
 			);
@@ -430,27 +584,23 @@ final class WBC_Grid_Data {
 	}
 
 	/**
-	 * Native add-to-cart field names. Persons field depends on whether custom person types exist.
+	 * Native add-to-cart field names.
+	 *
+	 * With person types the single persons field does not exist: every type posts its own
+	 * `wc_bookings_field_persons_<id>` (descriptor `personTypes`). The field is then EMPTY on
+	 * purpose — an older grid.js posting the head count there sends no persons at all and the
+	 * cart refuses loudly ("minimum persons"). The pre-1.2 fallback sent everybody to the FIRST
+	 * type, which the cart accepted at the wrong price (2+1 = 300 instead of 250).
 	 *
 	 * @param object $product
 	 * @return array<string,string>
 	 */
 	private function form_fields( $product ) {
-		$person_field = 'wc_bookings_field_persons';
-
-		if ( method_exists( $product, 'has_person_types' ) && $product->has_person_types() && method_exists( $product, 'get_person_types' ) ) {
-			$types = $product->get_person_types();
-			if ( is_array( $types ) && ! empty( $types ) ) {
-				$first = reset( $types );
-				if ( is_object( $first ) && method_exists( $first, 'get_id' ) ) {
-					$person_field = 'wc_bookings_field_persons_' . (int) $first->get_id();
-				}
-			}
-		}
+		$has_types = WBC_Cost::uses_person_types( $product );
 
 		return array(
 			'start'    => 'wc_bookings_field_start_date_time',
-			'persons'  => $person_field,
+			'persons'  => $has_types ? '' : 'wc_bookings_field_persons',
 			'duration' => 'wc_bookings_field_duration',
 		);
 	}
@@ -481,7 +631,7 @@ final class WBC_Grid_Data {
 	 * @return string
 	 */
 	private function duration_text( $product, $type ) {
-		$unit_label = __( 'godz.', 'woobookings-custom' );
+		$unit_label = __( 'h', 'woobookings-custom' );
 
 		if ( 'flex' === $type ) {
 			$min = $this->int_call( $product, 'get_min_duration', 1 );
@@ -497,7 +647,8 @@ final class WBC_Grid_Data {
 	}
 
 	/**
-	 * Optional per-person rate for future card pricing (not rendered in slice 1).
+	 * Optional base per-person rate in the payload. The card does not render it; person-type
+	 * prices on the card come from WBC_Cost.
 	 *
 	 * @param object $product
 	 * @return float|null
@@ -528,6 +679,27 @@ final class WBC_Grid_Data {
 	}
 
 	/**
+	 * Product image for the details dialog: from the translation, or from the canonical product
+	 * when the translation has none.
+	 *
+	 * WCML copies the image onto a translation only when the source is saved with sync enabled.
+	 * The editor sets the image on the source product and does not need to know whether the copy
+	 * arrived: translations get the same image through this fallback. This is the IMAGE channel;
+	 * the description stays plain text (clean_text).
+	 *
+	 * @param WC_Product $product           Product in the page language.
+	 * @param WC_Product $canonical_product Canonical (source-language) product.
+	 * @return array|null
+	 */
+	private function product_image( $product, $canonical_product ) {
+		$image = WBC_Image::payload( $this->int_call( $product, 'get_image_id', 0 ) );
+		if ( null === $image && $canonical_product !== $product ) {
+			$image = WBC_Image::payload( $this->int_call( $canonical_product, 'get_image_id', 0 ) );
+		}
+		return $image;
+	}
+
+	/**
 	 * Strip shortcodes/tags from meta text; JS inserts via textContent, this keeps it clean.
 	 *
 	 * @param string $text
@@ -547,20 +719,24 @@ final class WBC_Grid_Data {
 	private function build_i18n() {
 		return array(
 			'book'           => __( 'Book', 'woobookings-custom' ),
-			'full'           => __( 'Brak miejsc', 'woobookings-custom' ),
+			'full'           => __( 'Sold out', 'woobookings-custom' ),
 			'past'           => __( 'Slot has passed', 'woobookings-custom' ),
 			'persons'        => __( 'People', 'woobookings-custom' ),
 			'duration'       => __( 'Duration', 'woobookings-custom' ),
-			'hourShort'      => __( 'godz.', 'woobookings-custom' ),
-			'seats'          => __( 'miejsc', 'woobookings-custom' ),
+			'hourShort'      => __( 'h', 'woobookings-custom' ),
+			'seats'          => __( 'seats', 'woobookings-custom' ),
 			'noSlots'        => __( 'No slots on this day', 'woobookings-custom' ),
 			'loading'        => __( 'Loading slots…', 'woobookings-custom' ),
 			'error'          => __( 'Could not load slots. Please refresh the page.', 'woobookings-custom' ),
-			'close'          => __( 'Zamknij', 'woobookings-custom' ),
+			'close'          => __( 'Close', 'woobookings-custom' ),
 			'hostLabel'      => __( 'Host:', 'woobookings-custom' ),
 			'daypickerLabel' => __( 'Day selection', 'woobookings-custom' ),
 			'decrease'       => __( 'Fewer people', 'woobookings-custom' ),
 			'increase'       => __( 'More people', 'woobookings-custom' ),
+			/* translators: %s: person type name, e.g. "Adults" */
+			'decreaseType'   => __( 'Fewer: %s', 'woobookings-custom' ),
+			/* translators: %s: person type name, e.g. "Adults" */
+			'increaseType'   => __( 'More: %s', 'woobookings-custom' ),
 			'details'        => __( 'Session details', 'woobookings-custom' ),
 			// The number of minutes is NOT typed here. It comes from WBC_Hold, the same constant
 			// that drives the real expiry, so the copy cannot promise one thing while the system
@@ -568,7 +744,7 @@ final class WBC_Grid_Data {
 			'addedToCart'    => WBC_Hold::notice_text(),
 			'goToCart'       => __( 'Go to cart', 'woobookings-custom' ),
 			'addError'       => __( 'Could not add to cart.', 'woobookings-custom' ),
-			// Nawigacja stronami dni (kroki to 8-dniowe strony, nie kalendarzowe tygodnie — copy
+			// Day page navigation (steps are 8-day pages, not calendar weeks, so the copy
 			// deliberately talks about slots, not weeks).
 			'prevDays'       => __( 'Earlier slots', 'woobookings-custom' ),
 			'nextDays'       => __( 'Later slots', 'woobookings-custom' ),
@@ -578,9 +754,12 @@ final class WBC_Grid_Data {
 			'statusNone'     => __( 'no slots', 'woobookings-custom' ),
 			'statusEnd'      => __( 'End of available slots.', 'woobookings-custom' ),
 			'statusStart'    => __( 'Earliest range.', 'woobookings-custom' ),
-			'slotOne'        => __( '%d termin', 'woobookings-custom' ),
-			'slotFew'        => __( '%d terminy', 'woobookings-custom' ),
-			'slotMany'       => __( '%d slots', 'woobookings-custom' ),
+			/* translators: %d: number of slots, singular form. */
+			'slotOne'        => __( '%d slot', 'woobookings-custom' ),
+			/* translators: %d: number of slots, the Polish form for 2 to 4 (shown on Polish sites only); other languages can repeat the plural. */
+			'slotFew'        => _x( '%d slots', 'slot count, few form', 'woobookings-custom' ),
+			/* translators: %d: number of slots, plural form. */
+			'slotMany'       => _x( '%d slots', 'slot count, many form', 'woobookings-custom' ),
 		);
 	}
 }

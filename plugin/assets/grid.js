@@ -140,8 +140,8 @@
 
 	/*
 	 * A failure (HTTP !ok, network throw, broken JSON) resolves to {ok:false} — DISTINCT from a
-	 * legally empty calendar. On the navigation path an empty week is meaningful ("Brak
-	 * slots") while an error must say so and must never be memoized; collapsing both to
+	 * legally empty calendar. On the navigation path an empty week is meaningful ("no slots"
+	 * on this day) while an error must say so and must never be memoized; collapsing both to
 	 * empty records would render a lying "no sessions" for a transient 500 and freeze it in
 	 * memo for the whole session.
 	 */
@@ -250,8 +250,8 @@
 	function currentRange() {
 		return {
 			min: days[0].key,
-			// Rule 15: the endpoint's max_date is EXCLUSIVE — the bound is the day AFTER the
-			// last tile, or the eighth day would be permanently empty (v1.0.4 class).
+			// The endpoint's max_date is EXCLUSIVE — the bound is the day AFTER the
+			// last tile, or the eighth day would be permanently empty (an off-by-one).
 			maxExcl: addDays(days[days.length - 1].key, 1)
 		};
 	}
@@ -368,7 +368,7 @@
 
 	// aria-disabled, never native disabled: the boundary is reached by repeatedly activating
 	// the SAME arrow, so the control goes inactive UNDER the keyboard focus — a natively
-	// disabled button would drop that focus to <body> (the v1.0.7/K8 defect class).
+	// disabled button would drop that focus to <body>.
 	function setPagerState(btn, enabled) {
 		if (enabled) {
 			btn.removeAttribute('aria-disabled');
@@ -438,16 +438,16 @@
 
 	/* -------------------------------------------------------- status announcements */
 
-	// Locale plural forms: languages with three forms use all of them, two-form languages use one and many.
+	// Plural forms: Polish uses all three (one, few, many); every other language uses one and many.
 	function slotCountPhrase(n) {
 		if (!n) {
 			return i18n('statusNone', 'no slots');
 		}
 		var form;
 		if (n === 1) {
-			form = i18n('slotOne', '%d termin');
+			form = i18n('slotOne', '%d slot');
 		} else if ('pl' === LANG && n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14)) {
-			form = i18n('slotFew', '%d terminy');
+			form = i18n('slotFew', '%d slots');
 		} else {
 			form = i18n('slotMany', '%d slots');
 		}
@@ -639,13 +639,17 @@
 		if (available < minPersons) {
 			return 'full';
 		}
+		// With person types the smallest party is the sum of the counters' starting values.
+		if (hasPersonTypes(product) && personRowsTotal(personTypeRows(product)) > personLimit(product, available)) {
+			return 'full';
+		}
 		return 'book';
 	}
 
 	/* Delegates to the shared slot module, which is where the date logic lives and where the
 	   tests point. See assets/slots.js for why the weekday is computed the way it is. */
 	function hostForSlot(product, slot) {
-		return SLOTS.hostForSlot(product, slot, WARSAW);
+		return SLOTS.hostForSlot(product, slot, WARSAW, CFG.hostsById);
 	}
 
 	function buildCard(slot) {
@@ -656,7 +660,7 @@
 
 		// The endpoint can report a negative available (non-atomic add-to-cart racing the same
 		// slot, or a capacity lowered under existing bookings — production shows available:-7 on
-		// WPML-duplicated products). Never let arithmetic like that reach the card as "-7/18 miejsc";
+		// WPML-duplicated products). Never let arithmetic like that reach the card as "-7/20 seats";
 		// clamp at zero, which also makes the slot read as full, exactly as it is.
 		var available = Math.max(0, toInt(slot.available, 0));
 		var booked = Math.max(0, toInt(slot.booked, 0));
@@ -695,7 +699,7 @@
 			hostName.type = 'button';
 			hostName.setAttribute('aria-haspopup', 'dialog');
 			hostName.addEventListener('click', function () {
-				openModal({ label: host.name, description: host.bio }, hostName);
+				openModal({ label: host.name, description: host.bio, image: host.image }, hostName);
 			});
 			hostLine.appendChild(hostName);
 			nameWrap.appendChild(hostLine);
@@ -707,7 +711,7 @@
 		var meta = el('div', 'wbc-grid__meta');
 		meta.appendChild(el('span', 'wbc-grid__duration', product.durationText));
 		var occ = el('span', 'wbc-grid__occupancy');
-		occ.textContent = available + '/' + total + ' ' + i18n('seats', 'miejsc');
+		occ.textContent = available + '/' + total + ' ' + i18n('seats', 'seats');
 		meta.appendChild(occ);
 		card.appendChild(meta);
 
@@ -737,7 +741,7 @@
 		// Classic form-POST to the native Woo add-to-cart handler — identical fields, identical
 		// vendor validation. NEVER the Store API — that path drops persons. When the browser
 		// can, the submit is intercepted and carried over fetch so the visitor stays on the
-		// list (K8); otherwise the native POST proceeds unchanged (progressive enhancement).
+		// list; otherwise the native POST proceeds unchanged (progressive enhancement).
 		var form = document.createElement('form');
 		form.className = 'wbc-grid__form';
 		form.method = 'post';
@@ -746,18 +750,27 @@
 		form.appendChild(hidden('add-to-cart', product.addToCartId));
 		form.appendChild(hidden(product.fields.start, slot.date));
 
-		var personsHidden = hidden(product.fields.persons, '');
-		form.appendChild(personsHidden);
-
-		// Persons and duration are ORTHOGONAL, config-driven controls (K1): either, both or
-		// neither may exist. A control is appended only when it was built — with both fixed
-		// the card renders just the CTA. Appending an undefined control here would throw
-		// inside buildCard's loop and silently kill the whole list render.
-		var pc = product.personsControl || {};
-		if (pc.enabled) {
-			wrap.appendChild(buildStepper(product, available, personsHidden));
+		// Person types (v1.2): one counter per type, each posting its own field. The single
+		// persons field does not exist for such a product (fields.persons is '').
+		// (A party too large for the free seats never gets here — slotState says 'full'.)
+		var personGroup = null;
+		if (hasPersonTypes(product)) {
+			personGroup = buildPersonGroup(product, available, form, personTypeRows(product));
+			wrap.appendChild(personGroup.node);
 		} else {
-			personsHidden.value = String(pc.fixed || 1);
+			var personsHidden = hidden(product.fields.persons, '');
+			form.appendChild(personsHidden);
+
+			// Persons and duration are ORTHOGONAL, config-driven controls: either, both or
+			// neither may exist. A control is appended only when it was built — with both fixed
+			// the card renders just the CTA. Appending an undefined control here would throw
+			// inside buildCard's loop and silently kill the whole list render.
+			var pc = product.personsControl || {};
+			if (pc.enabled) {
+				wrap.appendChild(buildStepper(product, available, personsHidden));
+			} else {
+				personsHidden.value = String(pc.fixed || 1);
+			}
 		}
 
 		var dc = product.durationControl || {};
@@ -773,6 +786,9 @@
 		cta.type = 'submit';
 		cta.textContent = i18n('book', 'Book');
 		form.appendChild(cta);
+		if (personGroup) {
+			personGroup.bindCta(cta);
+		}
 
 		// Submit (not click) catches both the button and Enter in one guard. Only when the
 		// whole toolchain exists — otherwise the native POST stays, still correct.
@@ -809,7 +825,7 @@
 				return;
 			}
 		} catch (err) {
-			// przechodzimy do fallbacku
+			// fall through to the fallback below
 		}
 
 		var params = window.wc_cart_fragments_params || window.wc_add_to_cart_params;
@@ -832,7 +848,7 @@
 					var nodes = document.querySelectorAll(selector);
 					for (var i = 0; i < nodes.length; i++) {
 						/*
-						 * Granica zaufania: to HTML wygenerowany przez WooCommerce na TYM SAMYM
+						 * Trust boundary: this is HTML that WooCommerce generated on the
 						 * same origin, fetched with the authenticated session: byte for byte the
 						 * markup the vendor's own cart-fragments script injects with replaceWith().
 						 * Fragments ARE markup by definition (mini cart, counter), so escaping them
@@ -869,7 +885,7 @@
 		}
 		var close = el('button', 'wbc-grid__toast-close', '×');
 		close.type = 'button';
-		close.setAttribute('aria-label', i18n('close', 'Zamknij'));
+		close.setAttribute('aria-label', i18n('close', 'Close'));
 		close.addEventListener('click', function () {
 			roots.toast.textContent = '';
 		});
@@ -880,7 +896,7 @@
 	// The submit disabled the focused CTA (focus falls to <body>) and the rerender detached it.
 	// A keyboard user booking several slots in a row must not restart tabbing from the top of
 	// the page: focus goes back to the same slot's CTA, or to the toast when the slot is no
-	// longer bookable. Same defect class as the v1.0.7 Escape/OneTap fix — on the K8 path.
+	// longer bookable. Same defect class as focus lost on Escape, on the add to cart path.
 	function restoreFocusAfterRender(slot, product) {
 		var sel = '[data-slot-iso="' + cssEscape(slotIso(slot)) + '"][data-product-id="' + cssEscape(String(product.id)) + '"] .wbc-grid__cta';
 		var cta = roots.list.querySelector(sel);
@@ -898,7 +914,7 @@
 	 * first — availability changed server-side and every cached page may now lie; other pages
 	 * refetch lazily on their next visit. This path KEEPS the previous snapshot on an empty or
 	 * failed response (unlike navigation): a transient REST failure right after a success toast
-	 * would otherwise paint a sold-out sauna with no recovery, since selectDay never refetches.
+	 * would otherwise paint a sold-out week with no recovery, since selectDay never refetches.
 	 * The server stays the truth at add time either way.
 	 */
 	function refreshCurrentAfterCart(slot, product) {
@@ -931,7 +947,7 @@
 			};
 			if (modal && !modal.overlay.hidden) {
 				// Applying under an open modal would detach lastTrigger, and closeModal()
-				// would drop focus to <body> (v1.0.7 class) — defer until the modal closes.
+				// would drop focus to <body>, so defer until the modal closes.
 				pendingApply = apply;
 				return;
 			}
@@ -947,7 +963,7 @@
 		}
 		form.dataset.inflight = '1';
 		cta.disabled = true;
-		// Dodanie do koszyka bywa odczuwalnie wolne (POST + przeliczenie koszyka po stronie
+		// Adding to cart can be noticeably slow (a POST plus a server-side cart recalculation).
 		// Without a busy signal the person clicking cannot tell whether anything happened. The
 		// spinner carries that visually and aria-busy carries it for screen readers.
 		cta.classList.add('wbc-grid__cta--busy');
@@ -996,7 +1012,7 @@
 					// The fallback copy deliberately omits the minute count. Hard-coding a number
 					// here would start lying the moment WBC_Hold::MINUTES changes, and a thinner
 					// message beats an untrue one.
-					showToast('success', i18n('addedToCart', 'Dodano do koszyka.'), true);
+					showToast('success', i18n('addedToCart', 'Added to cart.'), true);
 					// Refresh the header counter without reloading the page.
 					refreshCartFragments();
 					return refreshCurrentAfterCart(slot, product);
@@ -1083,6 +1099,164 @@
 		return stepper;
 	}
 
+	/* -------------------------------------------------------- person types (v1.2) */
+
+	function hasPersonTypes(product) {
+		return Array.isArray(product.personTypes) && product.personTypes.length > 0;
+	}
+
+	// Seats one booking may take: the product's party maximum, never more than what is free.
+	function personLimit(product, available) {
+		var maxTotal = toInt(product.maxPersons, 0);
+		return maxTotal > 0 ? Math.min(maxTotal, available) : available;
+	}
+
+	// A typed party is never empty: with every type at min 0 and "min persons" 0 the vendor
+	// would get no persons at all and skip both the minimum check and the person multiplier.
+	function personMinTotal(product) {
+		return Math.max(1, toInt(product.minPersons, 1));
+	}
+
+	function personRowsTotal(rows) {
+		var sum = 0;
+		for (var i = 0; i < rows.length; i++) {
+			sum += rows[i].value;
+		}
+		return sum;
+	}
+
+	/* Starting value of every counter: the type's own minimum. When those minimums do not reach
+	   the party minimum, the first type that already requires someone (min ≥ 1) takes the
+	   difference, else the first type that still has room — so the card opens on a party the
+	   cart accepts. */
+	function personTypeRows(product) {
+		var rows = product.personTypes.map(function (type) {
+			var min = Math.max(0, toInt(type.min, 0));
+			var max = type.max === null || type.max === undefined ? Infinity : Math.max(min, toInt(type.max, min));
+			return { type: type, min: min, max: max, value: min };
+		});
+		var shortfall = personMinTotal(product) - personRowsTotal(rows);
+		if (shortfall > 0) {
+			var target = null;
+			var i;
+			for (i = 0; i < rows.length && !target; i++) {
+				if (rows[i].min >= 1 && rows[i].max > rows[i].value) {
+					target = rows[i];
+				}
+			}
+			for (i = 0; i < rows.length && !target; i++) {
+				if (rows[i].max > rows[i].value) {
+					target = rows[i];
+				}
+			}
+			if (target) {
+				target.value = Math.min(target.max, target.value + shortfall);
+			}
+		}
+		return rows;
+	}
+
+	function typeLabel(type) {
+		return type.unitPriceText ? type.label + ' · ' + type.unitPriceText : type.label;
+	}
+
+	// '%s' substitution through a function: a type name with "$&" or "$$" must stay literal.
+	function fillName(template, name) {
+		return template.replace('%s', function () {
+			return name;
+		});
+	}
+
+	/* Locked buttons use aria-disabled, not disabled: a focused button that becomes disabled
+	   drops keyboard focus to <body>, and with two counters sharing one seat limit that
+	   happens on every click that reaches the limit (same choice as the day pager). */
+	function setLocked(btn, locked) {
+		btn.setAttribute('aria-disabled', locked ? 'true' : 'false');
+	}
+
+	function isLocked(btn) {
+		return btn.getAttribute('aria-disabled') === 'true';
+	}
+
+	function buildPersonGroup(product, available, form, rows) {
+		var limit = personLimit(product, available);
+		var minTotal = personMinTotal(product);
+		var cta = null;
+
+		var group = el('div', 'wbc-grid__persons');
+		group.setAttribute('role', 'group');
+		group.setAttribute('aria-label', i18n('persons', 'People'));
+
+		function sync() {
+			var sum = personRowsTotal(rows);
+			rows.forEach(function (row) {
+				row.output.textContent = String(row.value);
+				row.input.value = String(row.value);
+				// Never below the type's minimum nor below the party minimum the cart enforces.
+				setLocked(row.minus, row.value <= row.min || sum <= minTotal);
+				setLocked(row.plus, row.value >= row.max || sum >= limit);
+			});
+			// A starting party the type maximums could not lift to the minimum is not sendable.
+			// Never re-enable mid-request: the in-flight lock owns the CTA until it settles.
+			if (cta) {
+				cta.disabled = sum < minTotal || form.dataset.inflight === '1';
+				cta.classList.toggle('wbc-grid__cta--blocked', sum < minTotal);
+			}
+		}
+
+		rows.forEach(function (row) {
+			var line = el('div', 'wbc-grid__persons-row');
+			var label = el('span', 'wbc-grid__persons-label', typeLabel(row.type));
+			line.appendChild(label);
+
+			var stepper = el('div', 'wbc-grid__stepper');
+			stepper.setAttribute('role', 'group');
+			stepper.setAttribute('aria-label', row.type.label);
+
+			row.minus = el('button', 'wbc-grid__step wbc-grid__step--minus', '−');
+			row.minus.type = 'button';
+			row.minus.setAttribute('aria-label', fillName(i18n('decreaseType', 'Fewer: %s'), row.type.label));
+
+			row.output = el('span', 'wbc-grid__step-value', String(row.value));
+			row.output.setAttribute('aria-live', 'polite');
+
+			row.plus = el('button', 'wbc-grid__step wbc-grid__step--plus', '+');
+			row.plus.type = 'button';
+			row.plus.setAttribute('aria-label', fillName(i18n('increaseType', 'More: %s'), row.type.label));
+
+			row.input = hidden(row.type.field, row.value);
+			form.appendChild(row.input);
+
+			row.minus.addEventListener('click', function () {
+				if (!isLocked(row.minus)) {
+					row.value--;
+					sync();
+				}
+			});
+			row.plus.addEventListener('click', function () {
+				if (!isLocked(row.plus)) {
+					row.value++;
+					sync();
+				}
+			});
+
+			stepper.appendChild(row.minus);
+			stepper.appendChild(row.output);
+			stepper.appendChild(row.plus);
+			line.appendChild(stepper);
+			group.appendChild(line);
+		});
+
+		sync();
+		return {
+			node: group,
+			bindCta: function (button) {
+				cta = button;
+				sync();
+			}
+		};
+	}
+
 	// How many CONSECUTIVE hourly start slots (this one included) the product has from `slot`
 	// onward in the selected day — each counted only when it still has seats. Mirrors the
 	// vendor's hard boundary on the display side (class-wc-product-booking.php:2287: a block
@@ -1161,7 +1335,7 @@
 		for (var v = min; v <= max; v += step) {
 			var opt = document.createElement('option');
 			opt.value = String(v);
-			opt.textContent = v + ' ' + i18n('hourShort', 'godz.');
+			opt.textContent = v + ' ' + i18n('hourShort', 'h');
 			select.appendChild(opt);
 		}
 		select.value = String(min);
@@ -1211,12 +1385,25 @@
 
 		var close = el('button', 'wbc-grid__modal-close');
 		close.type = 'button';
-		close.setAttribute('aria-label', i18n('close', 'Zamknij'));
+		close.setAttribute('aria-label', i18n('close', 'Close'));
 		close.appendChild(closeIcon());
 		close.addEventListener('click', closeModal);
 
 		var title = el('h2', 'wbc-grid__modal-title');
 		title.id = 'wbc-grid-modal-title';
+
+		/* Image above the description: the product image (session) or the featured image
+		   (host). One element, created once, shown only when the payload carries `image`. The
+		   description still goes through textContent, so nothing from the editor becomes HTML. */
+		var img = el('img', 'wbc-grid__modal-img');
+		img.hidden = true;
+		img.alt = '';
+		img.decoding = 'async';
+		// A file deleted from disk while its library entry lives on: the URL exists, the image does
+		// not. Rather than an empty frame with a broken-image icon, show no image at all.
+		img.addEventListener('error', function () {
+			img.hidden = true;
+		});
 
 		var desc = el('p', 'wbc-grid__modal-desc');
 
@@ -1229,6 +1416,7 @@
 		header.appendChild(close);
 
 		var body = el('div', 'wbc-grid__modal-body');
+		body.appendChild(img);
 		body.appendChild(desc);
 
 		dialog.appendChild(header);
@@ -1247,7 +1435,9 @@
 		modal = {
 			overlay: overlay,
 			dialog: dialog,
+			body: body,
 			title: title,
+			img: img,
 			desc: desc
 		};
 		return modal;
@@ -1260,7 +1450,37 @@
 		m.title.textContent = product.label;
 		m.desc.textContent = product.description || '';
 
+		// Drop the previous image first: otherwise the old bitmap lingers under the new title until
+		// the new file decodes (decoding=async).
+		m.img.removeAttribute('src');
+		m.img.removeAttribute('srcset');
+		m.img.removeAttribute('sizes');
+		var image = product.image && product.image.src ? product.image : null;
+		if (image) {
+			// width/height BEFORE src: the browser reserves space from the ratio, so the description
+			// does not jump down when the image arrives.
+			if (image.width > 0 && image.height > 0) {
+				m.img.width = image.width;
+				m.img.height = image.height;
+			} else {
+				m.img.removeAttribute('width');
+				m.img.removeAttribute('height');
+			}
+			m.img.alt = image.alt || '';
+			if (image.srcset) {
+				m.img.srcset = image.srcset;
+				m.img.sizes = '(max-width: 552px) calc(100vw - 80px), 472px';
+			}
+			m.img.src = image.src;
+			m.img.hidden = false;
+		} else {
+			m.img.hidden = true;
+		}
+
 		m.overlay.hidden = false;
+		// The previous dialog may have been scrolled; the new one opens at the top. AFTER unhiding:
+		// an element without a box (display:none) ignores a scrollTop write.
+		m.body.scrollTop = 0;
 		document.body.classList.add('wbc-grid-modal-open');
 		var focusable = getFocusable(m.dialog);
 		if (focusable.length) {
@@ -1308,8 +1528,8 @@
 	function onModalKey(e) {
 		if (e.key === 'Escape') {
 			e.preventDefault();
-			// Stop here. The site's accessibility widget (OneTap Pro) also listens for Escape on
-			// the document and pulls focus onto its own toggle — which lands AFTER closeModal()
+			// Stop here. An accessibility widget on the page may also listen for Escape on
+			// the document and pull focus onto its own toggle — which lands AFTER closeModal()
 			// has correctly returned focus to the trigger, silently undoing it. A modal that
 			// consumes Escape must not let it reach global handlers.
 			e.stopPropagation();

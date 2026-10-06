@@ -23,6 +23,18 @@ final class WBC_Hosts {
 
 	public function __construct() {
 		add_action( 'init', array( $this, 'register_post_type' ) );
+		// The "Featured image" box exists only when the theme supports thumbnails. Most themes do,
+		// but switching themes (or a theme limiting support to post/page) would silently remove the
+		// box, so support is added for our own type after the theme (priority 11). add_theme_support
+		// with an array of types ADDS to the types already registered.
+		add_action( 'after_setup_theme', array( $this, 'ensure_thumbnail_support' ), 11 );
+	}
+
+	/**
+	 * @return void
+	 */
+	public function ensure_thumbnail_support() {
+		add_theme_support( 'post-thumbnails', array( self::POST_TYPE ) );
 	}
 
 	/**
@@ -58,15 +70,24 @@ final class WBC_Hosts {
 				'rewrite'             => false,
 				'menu_position'       => 26,
 				'menu_icon'           => 'dashicons-groups',
-				'supports'            => array( 'title', 'editor', 'revisions' ),
+				/*
+				 * `thumbnail` is the "Featured image" box in the editor, the only channel for a
+				 * host's photo. The biography goes through wp_strip_all_tags, so an image pasted
+				 * into the text never reaches the dialog; the photo has its own field, like the
+				 * product image.
+				 */
+				'supports'            => array( 'title', 'editor', 'thumbnail', 'revisions' ),
 				'capability_type'     => 'post',
 				/*
-				 * Block editor for the biography, the same one used for pages. The type is
-				 * `public => false`, so the REST route requires edit capability: exposing it here
-				 * does not turn biographies into a public endpoint.
+				 * Block editor for the biography, the same one used for pages. Note: `public => false`
+				 * does NOT close the REST route. WordPress core serves every PUBLISHED post of a
+				 * `show_in_rest` type without login (only `context=edit` needs capabilities). Name,
+				 * biography and featured image are therefore readable anonymously through the REST
+				 * API, which is the same data the grid shows publicly anyway; drafts stay private.
+				 * Do not put anything here that is not meant for the website.
 				 */
 				'show_in_rest'        => true,
-				'rest_base'           => 'wbc-hostowie',
+				'rest_base'           => 'wbc-hosts',
 			)
 		);
 	}
@@ -109,7 +130,7 @@ final class WBC_Hosts {
 	 * through WPML's language filters and resolves to the same person in every language.
 	 *
 	 * @param int $host_id Host post ID.
-	 * @return array{name:string,bio:string}|null Null, gdy wpisu nie ma lub jest w koszu.
+	 * @return array{name:string,bio:string,image:array|null}|null Null when the post is missing or trashed.
 	 */
 	public function get_host( $host_id ) {
 		$host_id = (int) $host_id;
@@ -128,8 +149,9 @@ final class WBC_Hosts {
 		}
 
 		return array(
-			'name' => $name,
-			'bio'  => trim( wp_strip_all_tags( (string) $post->post_content ) ),
+			'name'  => $name,
+			'bio'   => trim( wp_strip_all_tags( (string) $post->post_content ) ),
+			'image' => WBC_Image::payload( get_post_thumbnail_id( $post ) ),
 		);
 	}
 }

@@ -43,8 +43,7 @@ jobs:
 
       - name: Syntax check
         run: |
-          node --check plugin/assets/grid.js
-          node --check plugin/assets/slots.js
+          for f in plugin/assets/*.js; do node --check "$f"; done
 
       - name: Unit tests
         run: node --test tests/js/slots.test.js
@@ -61,7 +60,8 @@ jobs:
             echo "::error::console.log left in shipped assets"
             exit 1
           fi
-          if grep -rn --include='*.php' -E '\b(var_dump|print_r|error_log)\s*\(' plugin; then
+          # Deliberate diagnostics carry an explicit phpcs:ignore for DevelopmentFunctions.
+          if grep -rn --include='*.php' -E '\b(var_dump|print_r|error_log)\s*\(' plugin | grep -v 'phpcs:ignore WordPress.PHP.DevelopmentFunctions'; then
             echo "::error::debug output left in PHP"
             exit 1
           fi

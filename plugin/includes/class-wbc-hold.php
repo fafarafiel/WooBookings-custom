@@ -14,7 +14,7 @@ defined( 'ABSPATH' ) || exit;
  * releases the seats once the window expires.
  *
  * This class does two things and both must quote the SAME number of minutes:
- *   1. skraca vendorowe okno z 60 do naszego,
+ *   1. it shortens the vendor's 60 minute window to ours,
  *   2. it hands that value to the presentation layer, so the message a customer reads cannot
  *      drift away from the real expiry.
  *
@@ -26,10 +26,12 @@ final class WBC_Hold {
 	/**
 	 * How long a customer has to finish before the slot returns to the pool.
 	 *
-	 * Fifteen minutes rather than ten. The vendor warns on its own filter that a short window can
-	 * delete the booking BEFORE payment completes, and a redirect-based bank payment (log in,
-	 * authorise, come back) easily eats ten. Expiring mid-payment lands in the expensive
-	 * "paid after the hold expired" case, which has no automatic refund and needs a phone call.
+	 * The hold covers the time between adding to the cart and placing the order. Placing it moves
+	 * the booking out of the cart, to unpaid or pending confirmation
+	 * (class-wc-booking-cart-manager.php:561,634-640), and the expiry cron removes only bookings
+	 * still in a cart or removed from one (class-wc-booking-cron-manager.php:92), so payment
+	 * itself is never cut short. Fifteen minutes leaves room for the checkout form and still
+	 * releases an abandoned slot four times sooner than the vendor's 60 minutes.
 	 */
 	const MINUTES = 15;
 
@@ -53,7 +55,7 @@ final class WBC_Hold {
 	}
 
 	/**
-	 * Zdanie pokazywane klientowi po dodaniu do koszyka.
+	 * The sentence shown to the customer after adding to cart.
 	 *
 	 * The number is injected with sprintf from the same constant that drives the filter, so
 	 * changing it moves the real expiry and the customer-facing copy together. A translator

@@ -123,13 +123,23 @@
 	 * @param {Object} product Product descriptor from the payload.
 	 * @param {Object} slot Slot record.
 	 * @param {string} [timeZone] Shop timezone, used only for the numeric date fallback.
+	 * @param {Object} [hostsById] Person registry by ID, used for dated exceptions.
 	 * @returns {Object|null} Host with name and bio, or null.
 	 */
-	function hostForSlot(product, slot, timeZone) {
+	function hostForSlot(product, slot, timeZone, hostsById) {
 		if (!product) {
 			return null;
 		}
-		var key = slotKey(slotIso(slot, timeZone));
+		var iso = slotIso(slot, timeZone);
+		// A dated exception (`YYYY-MM-DD|HH:MM`) wins for that one day. A missing key, or a person
+		// absent from hostsById, falls through to the weekly rule: never a blank host line.
+		if (iso.length >= 16 && product.hostExceptions && hostsById) {
+			var exceptionId = product.hostExceptions[iso.slice(0, 10) + '|' + iso.slice(11, 16)];
+			if (exceptionId && hostsById[String(exceptionId)]) {
+				return hostsById[String(exceptionId)];
+			}
+		}
+		var key = slotKey(iso);
 		if (key && product.hosts && product.hosts[key]) {
 			return product.hosts[key];
 		}
