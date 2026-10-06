@@ -50,7 +50,8 @@ notice when the two disagree.
 
 ### Front end: no build step
 
-One CSS file and two scripts, plain ES5, no bundler. On a WordPress host there is no toolchain,
+One CSS file and two front-end scripts (plus `admin-hosts.js` in the product editor), plain ES5,
+no bundler. On a WordPress host there is no toolchain,
 and a build artifact nobody can rebuild on the server is a liability rather than an asset.
 
 `assets/slots.js` holds the pure date logic and is the only file the test suite imports.
@@ -95,8 +96,9 @@ product alone.
   order emails stay entirely the vendor's problem.
 - **No writes through the REST API.** The bookings REST endpoint is documented as incomplete for
   creation, and the products endpoint silently ignores availability and person fields on write.
-- **No price logic.** `WBC_Cost` exists as the single place a price rule would live, and registers
-  nothing, because the vendor's native per-person multiplier already produces the right number.
-  An empty pass-through on a hot filter is cost without behaviour.
+- **No price computation.** Bookings stays the only place that computes a booking's cost; nothing
+  here hooks the cost filter. `WBC_Cost` is a read layer: it reproduces the per-person figure for
+  the card from the same inputs the engine sums, and returns nothing when it cannot match the
+  engine, so the card never shows a price the cart would not charge.
 - **No caching of our own.** A second cache layer on top of a vendor cache with a different
   invalidation model is how stale seats happen.
