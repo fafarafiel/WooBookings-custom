@@ -87,7 +87,7 @@ final class WBC_Hosts {
 				 * Do not put anything here that is not meant for the website.
 				 */
 				'show_in_rest'        => true,
-				'rest_base'           => 'wbc-hostowie',
+				'rest_base'           => 'wbc-hosts',
 			)
 		);
 	}
