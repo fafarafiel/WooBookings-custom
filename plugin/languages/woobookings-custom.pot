@@ -37,6 +37,27 @@ msgid ""
 "any other event that should have the resource to itself."
 msgstr ""
 
+msgid "WooBookings Custom:"
+msgstr ""
+
+msgid ""
+"these products have a seat cap but no \"Special event\" tick. Since 1.1.0 "
+"only that tick blocks the whole evening, so right now they do not block it. "
+"If you updated from 1.0.0 and they are events, mark them; if they are "
+"regular sessions with a seat limit, say so. Only published products on the "
+"resource are listed, so check drafts, scheduled, pending and private "
+"products in the product editor."
+msgstr ""
+
+msgid "Mark them as special events"
+msgstr ""
+
+msgid "They are regular sessions"
+msgstr ""
+
+msgid "Insufficient permissions."
+msgstr ""
+
 msgid "h"
 msgstr ""
 
@@ -276,9 +297,6 @@ msgstr ""
 msgid "No hosts yet"
 msgstr ""
 
-msgid "WooBookings Custom:"
-msgstr ""
-
 msgid ""
 "the plugin has no shared resource configured, or finds no product bound to "
 "it. The booking grid is empty and cache flushing does nothing."
@@ -460,9 +478,6 @@ msgstr ""
 msgid ""
 "The shared resource is the anchor: products bound to it are discovered "
 "automatically. Use the ID override only during a production cutover."
-msgstr ""
-
-msgid "Insufficient permissions."
 msgstr ""
 
 msgid "WooBookings Custom settings"

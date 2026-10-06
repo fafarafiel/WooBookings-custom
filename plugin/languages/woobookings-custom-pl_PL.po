@@ -30,6 +30,21 @@ msgstr "Wydarzenie specjalne"
 msgid "Blocks the whole evening: while this event runs, regular sessions and open entry are unavailable. Tick it for a one-off session with a guest host or any other event that should have the resource to itself."
 msgstr "Blokuje cały wieczór: w czasie tego wydarzenia zwykłe sesje i wejście otwarte są niedostępne. Zaznacz przy jednorazowej sesji z gościem albo innym wydarzeniu, które ma mieć zasób tylko dla siebie."
 
+msgid "WooBookings Custom:"
+msgstr "WooBookings Custom:"
+
+msgid "these products have a seat cap but no \"Special event\" tick. Since 1.1.0 only that tick blocks the whole evening, so right now they do not block it. If you updated from 1.0.0 and they are events, mark them; if they are regular sessions with a seat limit, say so. Only published products on the resource are listed, so check drafts, scheduled, pending and private products in the product editor."
+msgstr "te produkty mają limit miejsc, ale nie mają zaznaczonego pola „Wydarzenie specjalne”. Od wersji 1.1.0 cały wieczór blokuje tylko to pole, więc teraz go nie blokują. Jeśli po aktualizacji z wersji 1.0.0 to są wydarzenia, oznacz je; jeśli to zwykłe sesje z limitem miejsc, wskaż to. Lista obejmuje tylko opublikowane produkty przypisane do zasobu, więc szkice, zaplanowane, oczekujące i prywatne produkty sprawdź w edytorze produktu."
+
+msgid "Mark them as special events"
+msgstr "Oznacz je jako wydarzenia specjalne"
+
+msgid "They are regular sessions"
+msgstr "To zwykłe sesje"
+
+msgid "Insufficient permissions."
+msgstr "Brak uprawnień."
+
 msgid "h"
 msgstr "godz."
 
@@ -251,9 +266,6 @@ msgstr "Szukaj prowadzących"
 msgid "No hosts yet"
 msgstr "Nie ma jeszcze prowadzących"
 
-msgid "WooBookings Custom:"
-msgstr "WooBookings Custom:"
-
 msgid "the plugin has no shared resource configured, or finds no product bound to it. The booking grid is empty and cache flushing does nothing."
 msgstr "wtyczka nie ma skonfigurowanego wspólnego zasobu albo nie znajduje przypisanych do niego produktów. Grafik rezerwacji jest pusty, a czyszczenie pamięci podręcznej nic nie robi."
 
@@ -390,9 +402,6 @@ msgstr "Jak daleko naprzód odwiedzający może przeglądać grafik. Górną gra
 msgid "The shared resource is the anchor: products bound to it are discovered automatically. Use the ID override only during a production cutover."
 msgstr "Wspólny zasób jest punktem odniesienia: przypisane do niego produkty są wykrywane automatycznie. Nadpisania ID używaj tylko podczas przełączania strony produkcyjnej."
 
-msgid "Insufficient permissions."
-msgstr "Brak uprawnień."
-
 msgid "WooBookings Custom settings"
 msgstr "Ustawienia WooBookings Custom"
 
@@ -413,6 +422,4 @@ msgstr "Sesja:"
 
 msgid "WooBookings Custom requires WooCommerce and WooCommerce Bookings to be active."
 msgstr "WooBookings Custom wymaga aktywnych wtyczek WooCommerce i WooCommerce Bookings."
-
-
 

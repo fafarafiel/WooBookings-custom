@@ -1,6 +1,7 @@
 <?php
 /**
- * Uninstall — remove the companion's own options only. Never touches Bookings/WCML data.
+ * Uninstall: remove the companion's own options and its dated host exception meta. Never touches
+ * Bookings/WCML data.
  *
  * @package WooBookings_Custom
  */
@@ -12,10 +13,11 @@ $woobookings_custom_options = array(
 	'woobookings_custom_product_ids',
 	'woobookings_custom_flex_product_id',
 	'woobookings_custom_ceremony_product_id',
+	'woobookings_custom_events_reviewed',
+	'woobookings_custom_horizon_months',
 	// Legacy keys from earlier versions; kept so uninstall cleans up after an upgrade path.
 	'woobookings_custom_host_avatar_meta',
 	'woobookings_custom_host_bio_meta',
-	'woobookings_custom_horizon_months',
 );
 
 foreach ( $woobookings_custom_options as $woobookings_custom_option ) {

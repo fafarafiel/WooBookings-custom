@@ -8,9 +8,9 @@
 defined( 'ABSPATH' ) || exit;
 
 /**
- * Singleton container. Component boot order is load-bearing: the WPML guard runs first so its
- * remove_action wins the race with woocommerce_new_booking, then config (needed by cache flush
- * and grid data), then the rest.
+ * Singleton container. Components are built in dependency order: the WPML guard first (config needs
+ * it; its remove_action is deferred to wp_loaded, see WBC_WPML_Guard), then config (needed by
+ * cache flush and grid data), then the rest.
  */
 final class WBC_Plugin {
 
@@ -44,6 +44,9 @@ final class WBC_Plugin {
 	/** @var WBC_Event_Fields|null */
 	private $event_fields = null;
 
+	/** @var WBC_Event_Review|null */
+	private $event_review = null;
+
 	/** @var WBC_Hosts */
 	private $hosts;
 
@@ -67,7 +70,7 @@ final class WBC_Plugin {
 	}
 
 	private function __construct() {
-		// FIRST: detach WPML duplication before any booking can fire woocommerce_new_booking.
+		// FIRST: config depends on it. It detaches the WPML duplication on wp_loaded.
 		$this->wpml_guard = new WBC_WPML_Guard();
 
 		$this->config      = new WBC_Config( $this->wpml_guard );
@@ -81,7 +84,8 @@ final class WBC_Plugin {
 		$this->vendor_strings->register();
 
 		// Special-event runtime (capacity cap + whole-evening exclusivity). Front + REST, so wired
-		// unconditionally; the three filters self-guard on the event-capacity meta.
+		// unconditionally; the capacity filters self-guard on the event-capacity meta, the exclusivity
+		// filter on resource membership and tier.
 		$this->events = new WBC_Events( $this->config, $this->wpml_guard );
 
 		// Hold window: shortens the vendor's 60 minutes and is the single source for the number
@@ -97,6 +101,9 @@ final class WBC_Plugin {
 		if ( is_admin() ) {
 			$this->settings     = new WBC_Settings( $this->config );
 			$this->event_fields = new WBC_Event_Fields();
+			// One-time question for capped products without the Special event marker (1.0.0 events).
+			$this->event_review = new WBC_Event_Review( $this->config, $this->cache_flush );
+			$this->event_review->register();
 			$this->host_fields  = new WBC_Host_Fields( $this->hosts );
 		}
 

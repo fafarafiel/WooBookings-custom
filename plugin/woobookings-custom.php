@@ -76,10 +76,10 @@ function woobookings_custom_missing_deps_notice() {
 /**
  * Bootstrap.
  *
- * Priority 20 on plugins_loaded is load-bearing: WooCommerce Multilingual registers its booking
- * duplication hook at the default priority, and the WPML guard removes that callback. Running
- * earlier would call remove_action() against a callback that does not exist yet, which fails
- * silently and leaves the duplication in place.
+ * Priority 20 on plugins_loaded runs after the plugins that finish loading at the default priority.
+ * The WPML guard does not rely on it: WooCommerce Multilingual adds its booking duplication hook
+ * later still, during its own init, so the guard removes that callback on wp_loaded (see
+ * WBC_WPML_Guard). Removing it any earlier would be a silent no-op.
  */
 function woobookings_custom_bootstrap() {
 	if ( ! class_exists( 'WooCommerce' ) || ! class_exists( 'WC_Bookings' ) ) {
@@ -93,6 +93,7 @@ function woobookings_custom_bootstrap() {
 	require_once WOOBOOKINGS_CUSTOM_PATH . 'includes/class-wbc-cost.php';
 	require_once WOOBOOKINGS_CUSTOM_PATH . 'includes/class-wbc-settings.php';
 	require_once WOOBOOKINGS_CUSTOM_PATH . 'includes/class-wbc-event-fields.php';
+	require_once WOOBOOKINGS_CUSTOM_PATH . 'includes/class-wbc-event-review.php';
 	require_once WOOBOOKINGS_CUSTOM_PATH . 'includes/class-wbc-image.php';
 	require_once WOOBOOKINGS_CUSTOM_PATH . 'includes/class-wbc-hosts.php';
 	require_once WOOBOOKINGS_CUSTOM_PATH . 'includes/class-wbc-host-fields.php';
