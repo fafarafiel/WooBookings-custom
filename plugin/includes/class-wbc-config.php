@@ -60,6 +60,24 @@ final class WBC_Config {
 	const META_HOST_MAP     = '_woobookings_custom_host_map';
 
 	/*
+	 * Dated exceptions: a different person on ONE specific day, key `YYYY-MM-DD|HH:MM`, value = ID
+	 * of the person in the host registry. They take precedence over MAP and DEFAULT. Past entries
+	 * are dropped when the product is saved and never reach the front end.
+	 */
+	const META_HOST_EXCEPTIONS = '_woobookings_custom_host_exceptions';
+
+	/**
+	 * Today's midnight in the WordPress time zone: one source for the grid, the exception save and
+	 * the validator.
+	 *
+	 * @return DateTimeImmutable
+	 */
+	public static function today_midnight() {
+		$today = new DateTimeImmutable( 'now', wp_timezone() );
+		return $today->setTime( 0, 0, 0 );
+	}
+
+	/*
 	 * No resource default. A staging ID as fallback (this used to be 848) fails silently on any
 	 * other install: the resource does not exist, discovery returns [], the grid renders empty and
 	 * WBC_Cache_Flush iterates nothing — all without a single log entry. Unconfigured must be

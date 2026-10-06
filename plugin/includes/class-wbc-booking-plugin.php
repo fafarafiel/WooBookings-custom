@@ -139,6 +139,11 @@ final class WBC_Plugin {
 		return $this->event_fields;
 	}
 
+	/** @return WBC_Hosts */
+	public function get_hosts() {
+		return $this->hosts;
+	}
+
 	/** @return WBC_Grid_Data */
 	public function get_grid_data() {
 		return $this->grid_data;

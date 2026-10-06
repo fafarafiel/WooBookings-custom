@@ -63,7 +63,7 @@ final class WBC_Grid_Data {
 			}
 		}
 
-		return array(
+		$payload = array(
 			'restUrl'    => esc_url_raw( rest_url( 'wc-bookings/v1/products/slots' ) ),
 			// WPML resolves the cart page per language, so the toast link lands on /koszyk/,
 			// /en/cart/ or /de/warenkorb/ to match the page.
@@ -89,6 +89,84 @@ final class WBC_Grid_Data {
 			'products'   => $products,
 			'i18n'       => $this->build_i18n(),
 		);
+
+		// Additive key (v1.3): every person named by a dated exception, once. Absent when no
+		// product has exceptions, so the payload of a site without them is unchanged.
+		$hosts_by_id = $this->hosts_by_id( $products );
+		if ( ! empty( $hosts_by_id ) ) {
+			$payload['hostsById'] = $hosts_by_id;
+		}
+
+		return $payload;
+	}
+
+	/**
+	 * Persons referenced by the products' dated exceptions, keyed by ID.
+	 *
+	 * @param array<string,array<string,mixed>> $products Descriptors.
+	 * @return array<string,array{name:string,bio:string,image:array|null}>
+	 */
+	private function hosts_by_id( $products ) {
+		$out = array();
+		if ( ! $this->hosts ) {
+			return $out;
+		}
+		foreach ( $products as $descriptor ) {
+			if ( empty( $descriptor['hostExceptions'] ) ) {
+				continue;
+			}
+			foreach ( $descriptor['hostExceptions'] as $host_id ) {
+				$id = (string) (int) $host_id;
+				if ( ! isset( $out[ $id ] ) ) {
+					$out[ $id ] = $this->hosts->get_host( (int) $host_id );
+				}
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * Dated host exceptions of a product for the navigable window, `{YYYY-MM-DD|HH:MM: hostId}`.
+	 *
+	 * Read off the CANONICAL product, like the weekly map. Only today…horizon end, only
+	 * persons that still exist and only times the weekly schedule still has — an orphan stays
+	 * in the panel (with a warning) but the card falls back to the weekly host.
+	 *
+	 * @param int $canonical_id
+	 * @return array<string,int>
+	 */
+	private function host_exceptions( $canonical_id ) {
+		if ( ! $this->hosts ) {
+			return array();
+		}
+		$saved = get_post_meta( (int) $canonical_id, WBC_Config::META_HOST_EXCEPTIONS, true );
+		if ( ! is_array( $saved ) || empty( $saved ) ) {
+			return array();
+		}
+
+		$today  = $this->today_midnight()->format( 'Y-m-d' );
+		$end    = $this->horizon_end_key();
+		$by_day = WBC_Host_Fields::times_by_weekday( WBC_Host_Fields::weekly_slots( wc_get_product( (int) $canonical_id ) ) );
+
+		$out = array();
+		foreach ( $saved as $key => $host_id ) {
+			if ( ! preg_match( '/^(\d{4}-\d{2}-\d{2})\|(\d{2}:\d{2})$/', (string) $key, $m ) ) {
+				continue;
+			}
+			if ( $m[1] < $today || $m[1] > $end ) {
+				continue;
+			}
+			$weekday = WBC_Host_Fields::weekday_of( $m[1] );
+			if ( ! isset( $by_day[ $weekday ] ) || ! in_array( $m[2], $by_day[ $weekday ], true ) ) {
+				continue;
+			}
+			if ( null === $this->hosts->get_host( (int) $host_id ) ) {
+				continue;
+			}
+			$out[ (string) $key ] = (int) $host_id;
+		}
+		ksort( $out );
+		return $out;
 	}
 
 	/**
@@ -97,8 +175,7 @@ final class WBC_Grid_Data {
 	 * @return DateTimeImmutable
 	 */
 	private function today_midnight() {
-		$today = new DateTimeImmutable( 'now', wp_timezone() );
-		return $today->setTime( 0, 0, 0 );
+		return WBC_Config::today_midnight();
 	}
 
 	/**
@@ -317,6 +394,12 @@ final class WBC_Grid_Data {
 			'hostDefault'     => $this->host_default( $canonical_id ),
 			'hosts'           => $this->host_map( $canonical_id ),
 		);
+
+		// Additive key (v1.3): absent when the product has no dated exceptions.
+		$exceptions = $this->host_exceptions( $canonical_id );
+		if ( ! empty( $exceptions ) ) {
+			$descriptor['hostExceptions'] = $exceptions;
+		}
 
 		// Additive key (v1.2): present only when the product has person types, so an older
 		// grid.js and every product without types see the payload exactly as before.

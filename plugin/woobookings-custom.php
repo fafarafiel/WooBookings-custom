@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name:       WooBookings Custom
- * Description:       Companion plugin for WooCommerce Bookings. Renders a day-strip booking grid with per-person-type counters and prices, adds special events with their own capacity and whole-evening exclusivity, assigns a host per recurring slot, shows product and host images in the session details, disarms WPML booking duplication and flushes vendor caches on the paths the vendor misses. Touches no vendor file.
- * Version:           1.2.0
+ * Description:       Companion plugin for WooCommerce Bookings. Renders a day-strip booking grid with per-person-type counters and prices, adds special events with their own capacity and whole-evening exclusivity, assigns a host per recurring slot with dated exceptions for a single day, shows product and host images in the session details, disarms WPML booking duplication and flushes vendor caches on the paths the vendor misses. Touches no vendor file.
+ * Version:           1.3.0
  * Requires at least: 6.4
  * Requires PHP:      8.2
  * Author:            iD4
@@ -17,7 +17,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'WOOBOOKINGS_CUSTOM_VERSION', '1.2.0' );
+define( 'WOOBOOKINGS_CUSTOM_VERSION', '1.3.0' );
 define( 'WOOBOOKINGS_CUSTOM_FILE', __FILE__ );
 define( 'WOOBOOKINGS_CUSTOM_PATH', plugin_dir_path( __FILE__ ) );
 define( 'WOOBOOKINGS_CUSTOM_URL', plugin_dir_url( __FILE__ ) );

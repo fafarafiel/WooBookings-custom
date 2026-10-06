@@ -533,14 +533,82 @@ final class WBC_Settings {
 	}
 
 	/**
-	 * Dated host exceptions pointing at a slot the schedule no longer has.
+	 * Dated host exceptions the grid cannot honour.
+	 *
+	 * Error: the exceptions sit on a translation, but the runtime reads the canonical product only
+	 * (the same class as the event-capacity misplacement).
+	 * Warning: upcoming exceptions whose time the weekly schedule no longer has (orphans) — the
+	 * card silently shows the weekly host for them.
 	 *
 	 * @param int[] $ids Product IDs to validate.
 	 * @return array<int,array{level:string,text:string}>
 	 */
 	public function check_host_exceptions( array $ids ) {
-		unset( $ids );
-		return array();
+		$problems = array();
+		$guard    = WBC_Plugin::instance()->get_wpml_guard();
+		$today    = WBC_Config::today_midnight()->format( 'Y-m-d' );
+
+		foreach ( $ids as $pid ) {
+			$saved = get_post_meta( (int) $pid, WBC_Config::META_HOST_EXCEPTIONS, true );
+			if ( ! is_array( $saved ) || empty( $saved ) ) {
+				continue;
+			}
+			$product = wc_get_product( $pid );
+			if ( ! is_object( $product ) ) {
+				continue;
+			}
+			$name = $product->get_name();
+
+			$canonical = $guard->wbc_canonical_id( (int) $pid );
+			if ( $canonical !== (int) $pid ) {
+				// A WPML copy that mirrors the original is harmless; only data that exists ONLY on
+				// the translation is invisible to the runtime.
+				// Only upcoming entries count: the original drops past dates on every save, a stale
+				// copy would otherwise differ forever.
+				$upcoming     = static function ( $map ) use ( $today ) {
+					$out = array();
+					foreach ( is_array( $map ) ? $map : array() as $k => $v ) {
+						if ( substr( (string) $k, 0, 10 ) >= $today ) {
+							$out[ (string) $k ] = (int) $v;
+						}
+					}
+					ksort( $out );
+					return $out;
+				};
+				$mine = $upcoming( $saved );
+				if ( empty( $mine ) || $mine === $upcoming( get_post_meta( $canonical, WBC_Config::META_HOST_EXCEPTIONS, true ) ) ) {
+					continue;
+				}
+				$problems[] = array(
+					'level' => 'error',
+					/* translators: %s: product name */
+					'text'  => sprintf( __( '"%s": host exceptions are saved on a translation instead of the source product, so the grid will not see them. Set them on the source-language product.', 'woobookings-custom' ), $name ),
+				);
+				continue;
+			}
+
+			$by_day  = WBC_Host_Fields::times_by_weekday( WBC_Host_Fields::weekly_slots( $product ) );
+			$hosts   = WBC_Plugin::instance()->get_hosts();
+			$orphans = 0;
+			foreach ( $saved as $key => $host_id ) {
+				if ( ! preg_match( '/^(\d{4}-\d{2}-\d{2})\|(\d{2}:\d{2})$/', (string) $key, $m ) || $m[1] < $today ) {
+					continue;
+				}
+				$weekday = WBC_Host_Fields::weekday_of( $m[1] );
+				if ( ! isset( $by_day[ $weekday ] ) || ! in_array( $m[2], $by_day[ $weekday ], true ) || null === $hosts->get_host( (int) $host_id ) ) {
+					++$orphans;
+				}
+			}
+			if ( $orphans > 0 ) {
+				$problems[] = array(
+					'level' => 'warning',
+					/* translators: 1: product name, 2: number of exceptions */
+					'text'  => sprintf( __( '"%1$s": %2$d host exception(s) the site will not show (a time outside the schedule or an unavailable person). On those days the weekly host is shown; fix or remove the exception.', 'woobookings-custom' ), $name, $orphans ),
+				);
+			}
+		}
+
+		return $problems;
 	}
 
 	/**

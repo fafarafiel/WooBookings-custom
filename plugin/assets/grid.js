@@ -649,7 +649,7 @@
 	/* Delegates to the shared slot module, which is where the date logic lives and where the
 	   tests point. See assets/slots.js for why the weekday is computed the way it is. */
 	function hostForSlot(product, slot) {
-		return SLOTS.hostForSlot(product, slot, WARSAW);
+		return SLOTS.hostForSlot(product, slot, WARSAW, CFG.hostsById);
 	}
 
 	function buildCard(slot) {

@@ -89,3 +89,25 @@ test('a product with no hosts map at all is safe', () => {
   assert.strictEqual(sandbox.hostForSlot({ hostDefault: HOST_A }, { date: '2026-08-15T18:15:00' }), HOST_A);
   assert.strictEqual(sandbox.hostForSlot({}, { date: '2026-08-15T18:15:00' }), null);
 });
+
+const GUEST = { name: 'C. Example', bio: 'bio c' };
+const BY_ID = { 31: GUEST, 12: HOST_B };
+
+test('a dated exception wins for that one day only', () => {
+  // Saturday 2026-08-15 at 18:15 is led by a guest; the same weekly slot a week later is not.
+  const product = { hosts: { '6|18:15': HOST_B }, hostDefault: HOST_A, hostExceptions: { '2026-08-15|18:15': 31 } };
+  assert.strictEqual(sandbox.hostForSlot(product, { date: '2026-08-15T18:15:00' }, undefined, BY_ID), GUEST, 'the dated day');
+  assert.strictEqual(sandbox.hostForSlot(product, { date: '2026-08-22T18:15:00' }, undefined, BY_ID), HOST_B, 'next week, weekly rule');
+  assert.strictEqual(sandbox.hostForSlot(product, { date: '2026-08-15T16:00:00' }, undefined, BY_ID), HOST_A, 'same day, other hour');
+});
+
+test('an exception pointing at an unknown person falls back to the weekly rule', () => {
+  // The person was unpublished after the exception was saved: show the weekly host, never a blank line.
+  const product = { hosts: { '6|18:15': HOST_B }, hostDefault: HOST_A, hostExceptions: { '2026-08-15|18:15': 99 } };
+  assert.strictEqual(sandbox.hostForSlot(product, { date: '2026-08-15T18:15:00' }, undefined, BY_ID), HOST_B);
+});
+
+test('without the person registry the exception is ignored', () => {
+  const product = { hosts: {}, hostDefault: HOST_A, hostExceptions: { '2026-08-15|18:15': 31 } };
+  assert.strictEqual(sandbox.hostForSlot(product, { date: '2026-08-15T18:15:00' }), HOST_A);
+});

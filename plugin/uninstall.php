@@ -21,3 +21,7 @@ $woobookings_custom_options = array(
 foreach ( $woobookings_custom_options as $woobookings_custom_option ) {
 	delete_option( $woobookings_custom_option );
 }
+
+// Dated host exceptions: data of this plugin only, and past entries are useless anyway. Nothing
+// that belongs to Bookings or WCML is touched.
+delete_post_meta_by_key( '_woobookings_custom_host_exceptions' );
