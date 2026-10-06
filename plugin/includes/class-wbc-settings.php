@@ -68,7 +68,7 @@ final class WBC_Settings {
 
 	/**
 	 * Warn about mis-configured events. Iterates
-	 * products carrying the event-capacity meta DIRECTLY (meta_query), NOT get_product_ids(): that
+	 * products carrying the event-capacity meta OR the special-event marker DIRECTLY (meta_query), NOT get_product_ids(): that
 	 * list is the discovery output and by construction only holds products already pinned to the
 	 * anchor resource, so an "event without a resource" — the exact failure this must catch — would
 	 * never appear in it and the notice would stay silent. A ghost event (cap > resource qty, or
@@ -99,11 +99,17 @@ final class WBC_Settings {
 				'fields'           => 'ids',
 				'suppress_filters' => true,
 				'meta_query'       => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+					'relation' => 'OR',
 					array(
 						'key'     => WBC_Config::META_EVENT_CAPACITY,
 						'value'   => 0,
 						'compare' => '>',
 						'type'    => 'NUMERIC',
+					),
+					// Since v1.1.0 whole-evening exclusivity has its own marker; validate it in the same loop.
+					array(
+						'key'   => WBC_Config::META_IS_EVENT,
+						'value' => '1',
 					),
 				),
 			)
@@ -120,20 +126,35 @@ final class WBC_Settings {
 				continue;
 			}
 
-			$cap  = (int) get_post_meta( $pid, WBC_Config::META_EVENT_CAPACITY, true );
-			$name = $product->get_name();
+			$cap        = (int) get_post_meta( $pid, WBC_Config::META_EVENT_CAPACITY, true );
+			$raw_marker = ( '1' === (string) get_post_meta( $pid, WBC_Config::META_IS_EVENT, true ) );
+			$name       = $product->get_name();
 
-			// The cap meta was found on the RAW product by the meta_query above, but every runtime
-			// reader (is_event / get_event_capacity and the three Faza-2 filters) resolves it on the
-			// CANONICAL PL product, and WCML does not copy this meta onto translations. A cap set on an
-			// EN/DE translation instead of the PL original therefore passes the meta_query yet reads
-			// back as zero at runtime: the event silently degrades to a plain 18-seat ceremony with no
-			// cap and no whole-evening blackout. is_event() canonicalizes, so a raw-meta product it
-			// reports as NOT an event is exactly this misplacement, the quiet failure this notice exists
-			// to kill. Shout instead of shipping a silently broken event.
-			if ( ! $this->config->is_event( $pid ) ) {
+			// Both metas were found on the RAW product by the meta_query above, but every runtime
+			// reader (is_event / get_event_capacity / is_special_event and the three event filters)
+			// resolves them on the CANONICAL source-language product, and WCML does not copy them onto
+			// translations. A value set on a translation instead of the source product therefore
+			// passes the meta_query yet reads back as empty at runtime: the cap silently vanishes, or
+			// the event never blacks out the evening. The canonicalizing readers report such a product
+			// as NOT capped / NOT special, exactly the misplacement this notice exists to catch. Shout
+			// instead of shipping a silently broken event.
+			// Open entry is checked on the RAW product (like render_field), not through the type map:
+			// the map only knows canonical products and would call a translated open-entry product a
+			// regular session, pointing the editor at the wrong advice.
+			$raw_is_flex = method_exists( $product, 'get_duration_type' ) && 'customer' === $product->get_duration_type();
+			if ( $raw_marker && $raw_is_flex ) {
 				/* translators: %s: product name */
-				$problems[] = sprintf( __( '"%s": event capacity is set on a translation instead of the source product. The plugin reads capacity from the source, so this event applies neither its seat limit nor its exclusivity. Set the capacity on the source-language product.', 'woobookings-custom' ), $name );
+				$problems[] = sprintf( __( '"%s": "Special event" is ticked on an open-entry product, which cannot block the evening. Untick the field.', 'woobookings-custom' ), $name );
+				continue;
+			}
+			if ( $raw_marker && ! $this->config->is_special_event( $pid ) ) {
+				/* translators: %s: product name */
+				$problems[] = sprintf( __( '"%s": "Special event" is ticked on a translation instead of the source product. The plugin reads the marker from the source, so this event will not block the evening. Tick it on the source-language product.', 'woobookings-custom' ), $name );
+				continue;
+			}
+			if ( $cap > 0 && ! $this->config->is_event( $pid ) ) {
+				/* translators: %s: product name */
+				$problems[] = sprintf( __( '"%s": event capacity is set on a translation instead of the source product. The plugin reads capacity from the source, so the seat limit will not apply. Set the capacity on the source-language product.', 'woobookings-custom' ), $name );
 				continue;
 			}
 
@@ -178,8 +199,11 @@ final class WBC_Settings {
 				}
 			}
 			if ( ! $has_bookable_window ) {
-				/* translators: %s: product name */
-				$problems[] = sprintf( __( '"%s": the event has no bookable availability rule, so it will not block regular sessions or open entry in its slot.', 'woobookings-custom' ), $name );
+				$problems[] = $this->config->is_special_event( $pid )
+					/* translators: %s: product name */
+					? sprintf( __( '"%s": the event has no bookable availability rule, so it will not block regular sessions or open entry in its slot.', 'woobookings-custom' ), $name )
+					/* translators: %s: product name */
+					: sprintf( __( '"%s": the product has no bookable availability rule, so it will not appear in the grid.', 'woobookings-custom' ), $name );
 			}
 		}
 
@@ -290,7 +314,9 @@ final class WBC_Settings {
 
 		$problems = array();
 		foreach ( $this->config->get_product_ids() as $pid ) {
-			if ( $this->config->is_event( $pid ) || 'ceremony' !== $this->config->get_product_type( $pid ) ) {
+			// Special events (the marker, not capacity, since regular sessions may have a capacity)
+			// are skipped: their exclusivity is by definition. Only regular sessions are checked.
+			if ( $this->config->is_special_event( $pid ) || 'ceremony' !== $this->config->get_product_type( $pid ) ) {
 				continue;
 			}
 			$ceremony = wc_get_product( $pid );

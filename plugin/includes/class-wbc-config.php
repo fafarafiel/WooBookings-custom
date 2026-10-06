@@ -26,13 +26,23 @@ final class WBC_Config {
 	const HORIZON_MAX     = 12;
 
 	/*
-	 * Postmeta marking a bookable product as a special event with its own seat cap (e.g. 12 vs the
-	 * standard ceremony's 18). Its PRESENCE with a positive value means "this is an event"; its
-	 * value is the single source of the capacity cap read by both runtime filters (slice 3, Faza 2).
+	 * Postmeta carrying a product's own seat cap (e.g. 10 on a 20-seat resource). Its value is the
+	 * single source of the capacity cap read by both runtime filters. Since v1.1.0 it says nothing
+	 * about exclusivity: regular sessions may carry a cap too; see META_IS_EVENT.
 	 * Not a product ID and not a taxonomy term (a category would be WPML-translated and break the
 	 * marker under EN/DE) — a hidden postmeta (leading underscore) travels on the canonical product.
 	 */
 	const META_EVENT_CAPACITY = '_woobookings_custom_event_capacity';
+
+	/*
+	 * Special event = whole-evening exclusivity (tier 3 in WBC_Events). A separate marker, NOT the
+	 * capacity: once regular sessions carry META_EVENT_CAPACITY too, "has a capacity" no longer
+	 * means "is an event". If the tier still followed capacity, a new event would share the tier
+	 * of a regular session and could not block it. Capacity stays the source of the seat limit;
+	 * this marker is the source of the blackout. Value `1` on the canonical product, like every
+	 * meta of this plugin.
+	 */
+	const META_IS_EVENT = '_woobookings_custom_is_event';
 
 	/**
 	 * Session host. Both meta keys live on the CANONICAL product, exactly like event capacity:
@@ -68,6 +78,9 @@ final class WBC_Config {
 
 	/** @var array<int,int> canonical id => event capacity (0 = not an event); per-request memo */
 	private $event_caps = array();
+
+	/** @var array<int,bool> canonical id => special-event marker; per-request memo */
+	private $special_events = array();
 
 	/**
 	 * @param WBC_WPML_Guard $wpml_guard
@@ -163,9 +176,10 @@ final class WBC_Config {
 	 */
 	public function invalidate_products_cache() {
 		delete_option( self::OPTION_PRODUCT_IDS );
-		$this->product_ids = null;
-		$this->types       = null;
-		$this->event_caps  = array();
+		$this->product_ids    = null;
+		$this->types          = null;
+		$this->event_caps     = array();
+		$this->special_events = array();
 	}
 
 	/**
@@ -228,13 +242,37 @@ final class WBC_Config {
 	}
 
 	/**
-	 * Whether a product is a special event (has a positive event capacity meta on its canonical PL).
+	 * Whether a product carries a seat cap (positive event capacity meta on its canonical product).
+	 * Since v1.1.0 this is NOT the exclusivity marker: regular sessions may carry a cap too; see
+	 * is_special_event() for the whole-evening blackout.
 	 *
 	 * @param int $id Product ID (any language).
 	 * @return bool
 	 */
 	public function is_event( $id ) {
 		return $this->get_event_capacity( $id ) > 0;
+	}
+
+	/**
+	 * Whether a product is a SPECIAL event — the whole-evening exclusivity marker (META_IS_EVENT),
+	 * independent of the capacity cap. Resolved on the canonical product like every other meta,
+	 * memoized per canonical ID (read on the availability-rules hot path).
+	 *
+	 * @param int $id Product ID (any language).
+	 * @return bool
+	 */
+	public function is_special_event( $id ) {
+		$canonical = $this->wpml_guard->wbc_canonical_id( (int) $id );
+		if ( ! $canonical ) {
+			return false;
+		}
+		if ( ! isset( $this->special_events[ $canonical ] ) ) {
+			// Open entry (flex) is never an event: a marker on it would put it at tier 3 and black
+			// out every regular session. The field is hidden for it, and ignored here.
+			$this->special_events[ $canonical ] = ( 'flex' !== $this->get_product_type( $canonical ) )
+				&& ( '1' === (string) get_post_meta( $canonical, self::META_IS_EVENT, true ) );
+		}
+		return $this->special_events[ $canonical ];
 	}
 
 	/**

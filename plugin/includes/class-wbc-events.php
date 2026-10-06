@@ -3,12 +3,15 @@
  * Events. Special-event runtime and the exclusivity hierarchy over the shared resource pool.
  *
  * Two mechanisms:
- *   1. own seat capacity for events (e.g. 12 on the 18-seat pool), driven by the
+ *   1. own seat capacity for events (e.g. 10 on the 20-seat resource), driven by the
  *      event-capacity meta (WBC_Config::META_EVENT_CAPACITY) read on the CANONICAL PL product;
  *   2. the exclusivity hierarchy event > ceremonia > open (tiers 3 > 2 > 1): a product's slots
  *      are blacked out by the bookable windows of every product with a HIGHER tier. The event
  *      keeps its whole-evening exclusivity (Fin 2026-07-18) as the top tier; the ceremony
- *      replaces the open entry in its own slot (wejscie-open, K3) as the middle one.
+ *      replaces the open entry in its own slot (wejscie-open, K3) as the middle one. Since
+ *      v1.1.0 the top tier comes from the explicit marker (WBC_Config::META_IS_EVENT), not
+ *      from the capacity meta: regular sessions may carry a capacity too, so capacity alone
+ *      no longer says "event".
  *
  * Three vendor filters, verified against the unpacked Bookings 3.7.0 source, NOT guessed
  * Each callback canonicalizes the passed product FIRST: on a translated checkout the
@@ -162,7 +165,13 @@ final class WBC_Events {
 	 * @return int
 	 */
 	private function tier( $canon ) {
-		if ( $this->config->is_event( $canon ) ) {
+		/*
+		 * By the MARKER, not by capacity: regular sessions may carry a capacity, so `is_event()`
+		 * would put them all at tier 3 and a new event could block none of them (blackout only
+		 * works downwards). Capacity still limits seats (filters 1 and 2); the tier comes from the
+		 * "Special event" field.
+		 */
+		if ( $this->config->is_special_event( $canon ) ) {
 			return 3;
 		}
 		if ( 'flex' === $this->config->get_product_type( $canon ) ) {

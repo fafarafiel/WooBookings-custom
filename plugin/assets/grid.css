@@ -776,6 +776,22 @@
 	pointer-events: none;
 }
 
+/* Image above the description (product image, or the host's featured image). (0,2,0), because
+   page-builder kits style a bare `img` (0,0,1) and themes add their own `img { … }`: the prefix
+   keeps our dimensions. `max-height` plus `object-fit: cover` keeps a portrait from pushing the
+   description off a phone screen; the crop starts at 30% height, where a face usually sits. */
+.wbc-grid .wbc-grid__modal-img {
+	display: block;
+	width: 100%;
+	height: auto;
+	max-height: 46vh;
+	object-fit: cover;
+	object-position: 50% 30%;
+	margin: 0 0 16px;
+	border-radius: calc(var(--wbc-radius) - 8px);
+	background: var(--wbc-surface-hi);
+}
+
 .wbc-grid__modal-desc {
 	margin: 0;
 	color: var(--wbc-text-soft);

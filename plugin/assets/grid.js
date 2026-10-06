@@ -695,7 +695,7 @@
 			hostName.type = 'button';
 			hostName.setAttribute('aria-haspopup', 'dialog');
 			hostName.addEventListener('click', function () {
-				openModal({ label: host.name, description: host.bio }, hostName);
+				openModal({ label: host.name, description: host.bio, image: host.image }, hostName);
 			});
 			hostLine.appendChild(hostName);
 			nameWrap.appendChild(hostLine);
@@ -1218,6 +1218,19 @@
 		var title = el('h2', 'wbc-grid__modal-title');
 		title.id = 'wbc-grid-modal-title';
 
+		/* Image above the description: the product image (session) or the featured image
+		   (host). One element, created once, shown only when the payload carries `image`. The
+		   description still goes through textContent, so nothing from the editor becomes HTML. */
+		var img = el('img', 'wbc-grid__modal-img');
+		img.hidden = true;
+		img.alt = '';
+		img.decoding = 'async';
+		// A file deleted from disk while its library entry lives on: the URL exists, the image does
+		// not. Rather than an empty frame with a broken-image icon, show no image at all.
+		img.addEventListener('error', function () {
+			img.hidden = true;
+		});
+
 		var desc = el('p', 'wbc-grid__modal-desc');
 
 		/* The header does not scroll with the description, so the close button stays reachable.
@@ -1229,6 +1242,7 @@
 		header.appendChild(close);
 
 		var body = el('div', 'wbc-grid__modal-body');
+		body.appendChild(img);
 		body.appendChild(desc);
 
 		dialog.appendChild(header);
@@ -1247,7 +1261,9 @@
 		modal = {
 			overlay: overlay,
 			dialog: dialog,
+			body: body,
 			title: title,
+			img: img,
 			desc: desc
 		};
 		return modal;
@@ -1260,7 +1276,37 @@
 		m.title.textContent = product.label;
 		m.desc.textContent = product.description || '';
 
+		// Drop the previous image first: otherwise the old bitmap lingers under the new title until
+		// the new file decodes (decoding=async).
+		m.img.removeAttribute('src');
+		m.img.removeAttribute('srcset');
+		m.img.removeAttribute('sizes');
+		var image = product.image && product.image.src ? product.image : null;
+		if (image) {
+			// width/height BEFORE src: the browser reserves space from the ratio, so the description
+			// does not jump down when the image arrives.
+			if (image.width > 0 && image.height > 0) {
+				m.img.width = image.width;
+				m.img.height = image.height;
+			} else {
+				m.img.removeAttribute('width');
+				m.img.removeAttribute('height');
+			}
+			m.img.alt = image.alt || '';
+			if (image.srcset) {
+				m.img.srcset = image.srcset;
+				m.img.sizes = '(max-width: 552px) calc(100vw - 80px), 472px';
+			}
+			m.img.src = image.src;
+			m.img.hidden = false;
+		} else {
+			m.img.hidden = true;
+		}
+
 		m.overlay.hidden = false;
+		// The previous dialog may have been scrolled; the new one opens at the top. AFTER unhiding:
+		// an element without a box (display:none) ignores a scrollTop write.
+		m.body.scrollTop = 0;
 		document.body.classList.add('wbc-grid-modal-open');
 		var focusable = getFocusable(m.dialog);
 		if (focusable.length) {

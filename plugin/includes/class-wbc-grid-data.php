@@ -304,6 +304,7 @@ final class WBC_Grid_Data {
 			'type'            => $type,
 			'label'           => $product->get_name(),
 			'description'     => $this->clean_text( $product->get_description() ),
+			'image'           => $this->product_image( $product, $canonical_product ),
 			'durationText'    => $this->duration_text( $canonical_product, $type ),
 			'minPersons'      => $min_persons,
 			'maxPersons'      => $max_persons,
@@ -328,7 +329,7 @@ final class WBC_Grid_Data {
 	 * string across every language.
 	 *
 	 * @param int $canonical_id ID produktu na kanonie PL.
-	 * @return array{name:string,bio:string}|null
+	 * @return array{name:string,bio:string,image:array|null}|null
 	 */
 	private function host_default( $canonical_id ) {
 		if ( ! $this->hosts ) {
@@ -345,7 +346,7 @@ final class WBC_Grid_Data {
 	 * front end: the client receives display-ready data only and never needs to know the registry.
 	 *
 	 * @param int $canonical_id ID produktu na kanonie PL.
-	 * @return array<string,array{name:string,bio:string}>
+	 * @return array<string,array{name:string,bio:string,image:array|null}>
 	 */
 	private function host_map( $canonical_id ) {
 		if ( ! $this->hosts ) {
@@ -525,6 +526,27 @@ final class WBC_Grid_Data {
 			}
 		}
 		return (int) $default;
+	}
+
+	/**
+	 * Product image for the details dialog: from the translation, or from the canonical product
+	 * when the translation has none.
+	 *
+	 * WCML copies the image onto a translation only when the source is saved with sync enabled.
+	 * The editor sets the image on the source product and does not need to know whether the copy
+	 * arrived: translations get the same image through this fallback. This is the IMAGE channel;
+	 * the description stays plain text (clean_text).
+	 *
+	 * @param WC_Product $product           Product in the page language.
+	 * @param WC_Product $canonical_product Canonical (source-language) product.
+	 * @return array|null
+	 */
+	private function product_image( $product, $canonical_product ) {
+		$image = WBC_Image::payload( $this->int_call( $product, 'get_image_id', 0 ) );
+		if ( null === $image && $canonical_product !== $product ) {
+			$image = WBC_Image::payload( $this->int_call( $canonical_product, 'get_image_id', 0 ) );
+		}
+		return $image;
 	}
 
 	/**

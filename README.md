@@ -10,10 +10,10 @@ can be updated without re-applying anything.
 ```
 [ ‹ ]  MON 10   TUE 11   WED 12   THU 13   FRI 14   SAT 15  [ › ]     MONTH [ August ▾ ]
 
-  16:00   Forest Ritual                     2 h    16/16 seats   [ − 1 + ]   [ Book ]
+  17:00   Group Session                     2 h    20/20 seats   [ − 1 + ]   [ Book ]
           Host: A. Example
 
-  18:15   Northern Lights                   2 h    16/16 seats   [ − 1 + ]   [ Book ]
+  18:30   Evening Session                   2 h    20/20 seats   [ − 1 + ]   [ Book ]
           Host: B. Example
 ```
 

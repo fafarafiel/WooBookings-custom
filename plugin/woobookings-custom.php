@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name:       WooBookings Custom
- * Description:       Companion plugin for WooCommerce Bookings. Renders a day-strip booking grid, adds special events with their own capacity and whole-evening exclusivity, assigns a host per recurring slot, disarms WPML booking duplication and flushes vendor caches on the paths the vendor misses. Touches no vendor file.
- * Version:           1.0.0
+ * Description:       Companion plugin for WooCommerce Bookings. Renders a day-strip booking grid, adds special events with their own capacity and whole-evening exclusivity, assigns a host per recurring slot, shows product and host images in the session details, disarms WPML booking duplication and flushes vendor caches on the paths the vendor misses. Touches no vendor file.
+ * Version:           1.1.0
  * Requires at least: 6.4
  * Requires PHP:      8.2
  * Author:            iD4
@@ -17,7 +17,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'WOOBOOKINGS_CUSTOM_VERSION', '1.0.0' );
+define( 'WOOBOOKINGS_CUSTOM_VERSION', '1.1.0' );
 define( 'WOOBOOKINGS_CUSTOM_FILE', __FILE__ );
 define( 'WOOBOOKINGS_CUSTOM_PATH', plugin_dir_path( __FILE__ ) );
 define( 'WOOBOOKINGS_CUSTOM_URL', plugin_dir_url( __FILE__ ) );
@@ -93,6 +93,7 @@ function woobookings_custom_bootstrap() {
 	require_once WOOBOOKINGS_CUSTOM_PATH . 'includes/class-wbc-cost.php';
 	require_once WOOBOOKINGS_CUSTOM_PATH . 'includes/class-wbc-settings.php';
 	require_once WOOBOOKINGS_CUSTOM_PATH . 'includes/class-wbc-event-fields.php';
+	require_once WOOBOOKINGS_CUSTOM_PATH . 'includes/class-wbc-image.php';
 	require_once WOOBOOKINGS_CUSTOM_PATH . 'includes/class-wbc-hosts.php';
 	require_once WOOBOOKINGS_CUSTOM_PATH . 'includes/class-wbc-host-fields.php';
 	require_once WOOBOOKINGS_CUSTOM_PATH . 'includes/class-wbc-grid-data.php';
