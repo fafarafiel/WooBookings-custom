@@ -140,7 +140,7 @@ Longer version with the reasoning behind each boundary: [`docs/ARCHITECTURE.md`]
 ## Tests
 
 ```bash
-php tests/php/run.php            # 65 assertions, no WordPress needed
+php tests/php/run.php            # 72 assertions, no WordPress needed
 node --test tests/js/slots.test.js   # 13 tests, no DOM needed
 ```
 
@@ -188,7 +188,9 @@ Collected because each one cost real debugging time. Full list in
   with one button to mark them as special events and one to keep them as regular sessions. Answer
   it soon after updating, and check drafts, scheduled, pending and private products yourself; they
   are not listed. The grid shortcode is now registered as `[wbc_grid]`, the name this README has
-  always given; the 1.0.0 name `[wbc_grid_rezerwacji]` keeps working.
+  always given; the 1.0.0 name `[wbc_grid_rezerwacji]` keeps working. A product with "Has persons"
+  on and an empty "Max persons" field, which Bookings treats as no limit, now gets a party stepper
+  on the grid instead of booking exactly one person; a party is never smaller than one.
 - **1.2.0** Per person type counters with prices on the card, pricing health notice, Polish wording
   for Bookings cart messages.
 - **1.1.0** Product and host images in the details dialogs; the whole evening exclusivity moves to

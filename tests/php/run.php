@@ -94,6 +94,17 @@ t( '2028-02-29', WBC_Grid_Data::wbc_horizon_end( $jan31, 1 )->format( 'Y-m-d' ),
 $jan31_common = new DateTimeImmutable( '2027-01-31 00:00:00' );
 t( '2027-02-28', WBC_Grid_Data::wbc_horizon_end( $jan31_common, 1 )->format( 'Y-m-d' ), 'same case in a common year' );
 
+echo "\nparty size\n";
+$persons_control = new ReflectionMethod( 'WBC_Grid_Data', 'persons_control' );
+$grid_data = ( new ReflectionClass( 'WBC_Grid_Data' ) )->newInstanceWithoutConstructor();
+t( 4, WBC_Grid_Data::party_max( 4, 20, true ), 'a set maximum party size is kept' );
+t( 20, WBC_Grid_Data::party_max( 0, 20, true ), 'an empty maximum party size allows up to the capacity' );
+t( 1, WBC_Grid_Data::party_max( 0, 0, true ), 'a party size never drops below one' );
+t( true, $persons_control->invoke( $grid_data, 1, WBC_Grid_Data::party_max( 0, 20, true ) )['enabled'], 'an empty maximum party size shows the stepper' );
+t( 1, $persons_control->invoke( $grid_data, 0, WBC_Grid_Data::party_max( 0, 20, true ) )['min'], 'an empty minimum party size still books at least one person' );
+t( 1, WBC_Grid_Data::party_max( 5, 20, false ), 'without persons the maximum party size is one' );
+t( false, $persons_control->invoke( $grid_data, 1, WBC_Grid_Data::party_max( 5, 20, false ) )['enabled'], 'without persons a stale maximum shows no stepper' );
+
 echo "\nslot keys\n";
 
 t( '6|18:15', WBC_Host_Fields::slot_key( 6, '18:15' ), 'weekday and time compose into the map key' );

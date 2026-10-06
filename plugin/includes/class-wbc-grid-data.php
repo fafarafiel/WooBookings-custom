@@ -371,9 +371,17 @@ final class WBC_Grid_Data {
 		}
 
 		$type        = $this->config->get_product_type( $canonical_id );
-		$min_persons = $this->int_call( $canonical_product, 'get_min_persons', 1 );
-		$max_persons = $this->int_call( $canonical_product, 'get_max_persons', $this->int_call( $canonical_product, 'get_qty', 18 ) );
+		$has_persons = method_exists( $canonical_product, 'has_persons' ) && $canonical_product->has_persons();
+		// A party is never empty: an empty "Min persons" is stored as 0, and Bookings would accept
+		// a booking for nobody at no cost, even on a full slot. Without "Has persons" the head count
+		// is ignored, so the party is one.
+		$min_persons = $has_persons ? max( 1, $this->int_call( $canonical_product, 'get_min_persons', 1 ) ) : 1;
 		$capacity    = $this->resource_capacity( $canonical_product );
+		$max_persons = self::party_max(
+			$this->int_call( $canonical_product, 'get_max_persons', $this->int_call( $canonical_product, 'get_qty', 18 ) ),
+			$capacity,
+			$has_persons
+		);
 
 		$descriptor = array(
 			'id'              => (int) $canonical_id,
@@ -499,6 +507,26 @@ final class WBC_Grid_Data {
 	}
 
 	/**
+	 * Largest party one booking may take. Bookings stores an empty "Max persons" as 0 and, with
+	 * "Has persons" on, treats 0 as no limit (class-wc-product-booking.php:340,2780), so 0 falls
+	 * back to the seat capacity and the grid clamps the party to the seats still free. Without
+	 * "Has persons" Bookings ignores the head count (wc-bookings-functions.php:1576), so the party
+	 * is one whatever the field says.
+	 *
+	 * @param int  $max_persons Product setting, 0 when empty.
+	 * @param int  $capacity    Seats on the shared resource.
+	 * @param bool $has_persons Whether the product counts persons.
+	 * @return int
+	 */
+	public static function party_max( $max_persons, $capacity, $has_persons ) {
+		if ( ! $has_persons ) {
+			return 1;
+		}
+		$max_persons = (int) $max_persons;
+		return $max_persons > 0 ? $max_persons : max( 1, (int) $capacity );
+	}
+
+	/**
 	 * Persons control is data-driven: the stepper exists exactly when the Bookings
 	 * configuration leaves the customer a real choice (min < max). Equal bounds mean the
 	 * count is fixed by configuration — no control, the hidden field carries the value.
@@ -510,7 +538,7 @@ final class WBC_Grid_Data {
 	 * @return array<string,mixed>
 	 */
 	private function persons_control( $min, $max ) {
-		$min = (int) $min;
+		$min = max( 1, (int) $min );
 		$max = (int) $max;
 
 		if ( $min < $max ) {
