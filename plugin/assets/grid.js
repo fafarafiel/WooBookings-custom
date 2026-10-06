@@ -639,6 +639,10 @@
 		if (available < minPersons) {
 			return 'full';
 		}
+		// With person types the smallest party is the sum of the counters' starting values.
+		if (hasPersonTypes(product) && personRowsTotal(personTypeRows(product)) > personLimit(product, available)) {
+			return 'full';
+		}
 		return 'book';
 	}
 
@@ -746,18 +750,27 @@
 		form.appendChild(hidden('add-to-cart', product.addToCartId));
 		form.appendChild(hidden(product.fields.start, slot.date));
 
-		var personsHidden = hidden(product.fields.persons, '');
-		form.appendChild(personsHidden);
-
-		// Persons and duration are ORTHOGONAL, config-driven controls (K1): either, both or
-		// neither may exist. A control is appended only when it was built — with both fixed
-		// the card renders just the CTA. Appending an undefined control here would throw
-		// inside buildCard's loop and silently kill the whole list render.
-		var pc = product.personsControl || {};
-		if (pc.enabled) {
-			wrap.appendChild(buildStepper(product, available, personsHidden));
+		// Person types (v1.2): one counter per type, each posting its own field. The single
+		// persons field does not exist for such a product (fields.persons is '').
+		// (A party too large for the free seats never gets here — slotState says 'full'.)
+		var personGroup = null;
+		if (hasPersonTypes(product)) {
+			personGroup = buildPersonGroup(product, available, form, personTypeRows(product));
+			wrap.appendChild(personGroup.node);
 		} else {
-			personsHidden.value = String(pc.fixed || 1);
+			var personsHidden = hidden(product.fields.persons, '');
+			form.appendChild(personsHidden);
+
+			// Persons and duration are ORTHOGONAL, config-driven controls (K1): either, both or
+			// neither may exist. A control is appended only when it was built — with both fixed
+			// the card renders just the CTA. Appending an undefined control here would throw
+			// inside buildCard's loop and silently kill the whole list render.
+			var pc = product.personsControl || {};
+			if (pc.enabled) {
+				wrap.appendChild(buildStepper(product, available, personsHidden));
+			} else {
+				personsHidden.value = String(pc.fixed || 1);
+			}
 		}
 
 		var dc = product.durationControl || {};
@@ -773,6 +786,9 @@
 		cta.type = 'submit';
 		cta.textContent = i18n('book', 'Book');
 		form.appendChild(cta);
+		if (personGroup) {
+			personGroup.bindCta(cta);
+		}
 
 		// Submit (not click) catches both the button and Enter in one guard. Only when the
 		// whole toolchain exists — otherwise the native POST stays, still correct.
@@ -1081,6 +1097,164 @@
 		stepper.appendChild(plus);
 		sync();
 		return stepper;
+	}
+
+	/* -------------------------------------------------------- person types (v1.2) */
+
+	function hasPersonTypes(product) {
+		return Array.isArray(product.personTypes) && product.personTypes.length > 0;
+	}
+
+	// Seats one booking may take: the product's party maximum, never more than what is free.
+	function personLimit(product, available) {
+		var maxTotal = toInt(product.maxPersons, 0);
+		return maxTotal > 0 ? Math.min(maxTotal, available) : available;
+	}
+
+	// A typed party is never empty: with every type at min 0 and "min persons" 0 the vendor
+	// would get no persons at all and skip both the minimum check and the person multiplier.
+	function personMinTotal(product) {
+		return Math.max(1, toInt(product.minPersons, 1));
+	}
+
+	function personRowsTotal(rows) {
+		var sum = 0;
+		for (var i = 0; i < rows.length; i++) {
+			sum += rows[i].value;
+		}
+		return sum;
+	}
+
+	/* Starting value of every counter: the type's own minimum. When those minimums do not reach
+	   the party minimum, the first type that already requires someone (min ≥ 1) takes the
+	   difference, else the first type that still has room — so the card opens on a party the
+	   cart accepts. */
+	function personTypeRows(product) {
+		var rows = product.personTypes.map(function (type) {
+			var min = Math.max(0, toInt(type.min, 0));
+			var max = type.max === null || type.max === undefined ? Infinity : Math.max(min, toInt(type.max, min));
+			return { type: type, min: min, max: max, value: min };
+		});
+		var shortfall = personMinTotal(product) - personRowsTotal(rows);
+		if (shortfall > 0) {
+			var target = null;
+			var i;
+			for (i = 0; i < rows.length && !target; i++) {
+				if (rows[i].min >= 1 && rows[i].max > rows[i].value) {
+					target = rows[i];
+				}
+			}
+			for (i = 0; i < rows.length && !target; i++) {
+				if (rows[i].max > rows[i].value) {
+					target = rows[i];
+				}
+			}
+			if (target) {
+				target.value = Math.min(target.max, target.value + shortfall);
+			}
+		}
+		return rows;
+	}
+
+	function typeLabel(type) {
+		return type.unitPriceText ? type.label + ' · ' + type.unitPriceText : type.label;
+	}
+
+	// '%s' substitution through a function: a type name with "$&" or "$$" must stay literal.
+	function fillName(template, name) {
+		return template.replace('%s', function () {
+			return name;
+		});
+	}
+
+	/* Locked buttons use aria-disabled, not disabled: a focused button that becomes disabled
+	   drops keyboard focus to <body>, and with two counters sharing one seat limit that
+	   happens on every click that reaches the limit (same choice as the day pager). */
+	function setLocked(btn, locked) {
+		btn.setAttribute('aria-disabled', locked ? 'true' : 'false');
+	}
+
+	function isLocked(btn) {
+		return btn.getAttribute('aria-disabled') === 'true';
+	}
+
+	function buildPersonGroup(product, available, form, rows) {
+		var limit = personLimit(product, available);
+		var minTotal = personMinTotal(product);
+		var cta = null;
+
+		var group = el('div', 'wbc-grid__persons');
+		group.setAttribute('role', 'group');
+		group.setAttribute('aria-label', i18n('persons', 'People'));
+
+		function sync() {
+			var sum = personRowsTotal(rows);
+			rows.forEach(function (row) {
+				row.output.textContent = String(row.value);
+				row.input.value = String(row.value);
+				// Never below the type's minimum nor below the party minimum the cart enforces.
+				setLocked(row.minus, row.value <= row.min || sum <= minTotal);
+				setLocked(row.plus, row.value >= row.max || sum >= limit);
+			});
+			// A starting party the type maximums could not lift to the minimum is not sendable.
+			// Never re-enable mid-request: the in-flight lock owns the CTA until it settles.
+			if (cta) {
+				cta.disabled = sum < minTotal || form.dataset.inflight === '1';
+				cta.classList.toggle('wbc-grid__cta--blocked', sum < minTotal);
+			}
+		}
+
+		rows.forEach(function (row) {
+			var line = el('div', 'wbc-grid__persons-row');
+			var label = el('span', 'wbc-grid__persons-label', typeLabel(row.type));
+			line.appendChild(label);
+
+			var stepper = el('div', 'wbc-grid__stepper');
+			stepper.setAttribute('role', 'group');
+			stepper.setAttribute('aria-label', row.type.label);
+
+			row.minus = el('button', 'wbc-grid__step wbc-grid__step--minus', '−');
+			row.minus.type = 'button';
+			row.minus.setAttribute('aria-label', fillName(i18n('decreaseType', 'Fewer: %s'), row.type.label));
+
+			row.output = el('span', 'wbc-grid__step-value', String(row.value));
+			row.output.setAttribute('aria-live', 'polite');
+
+			row.plus = el('button', 'wbc-grid__step wbc-grid__step--plus', '+');
+			row.plus.type = 'button';
+			row.plus.setAttribute('aria-label', fillName(i18n('increaseType', 'More: %s'), row.type.label));
+
+			row.input = hidden(row.type.field, row.value);
+			form.appendChild(row.input);
+
+			row.minus.addEventListener('click', function () {
+				if (!isLocked(row.minus)) {
+					row.value--;
+					sync();
+				}
+			});
+			row.plus.addEventListener('click', function () {
+				if (!isLocked(row.plus)) {
+					row.value++;
+					sync();
+				}
+			});
+
+			stepper.appendChild(row.minus);
+			stepper.appendChild(row.output);
+			stepper.appendChild(row.plus);
+			line.appendChild(stepper);
+			group.appendChild(line);
+		});
+
+		sync();
+		return {
+			node: group,
+			bindCta: function (button) {
+				cta = button;
+				sync();
+			}
+		};
 	}
 
 	// How many CONSECUTIVE hourly start slots (this one included) the product has from `slot`

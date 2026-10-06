@@ -252,6 +252,7 @@
 		border-color: GrayText;
 		opacity: 1;
 	}
+
 }
 
 /* ------------------------------------------------------------------- day picker */
@@ -496,7 +497,7 @@
 	color: var(--wbc-text);
 }
 
-.wbc-grid .wbc-grid__step:hover:not(:disabled) {
+.wbc-grid .wbc-grid__step:hover:not(:disabled):not([aria-disabled="true"]) {
 	background: var(--wbc-accent-hi);
 	color: var(--wbc-on-accent-hi);
 }
@@ -506,10 +507,20 @@
 	outline-offset: -3px;
 }
 
-.wbc-grid .wbc-grid__step:disabled {
+.wbc-grid .wbc-grid__step:disabled,
+.wbc-grid .wbc-grid__step[aria-disabled="true"] {
 	color: #c3b7ae;
 	background: transparent;
 	cursor: not-allowed;
+}
+
+/* The person-type counters block −/+ through aria-disabled, which does NOT receive the system
+   GrayText (only a native :disabled does). The block sits AFTER the base rule: at equal
+   specificity an earlier forced-colors block would lose on source order. */
+@media (forced-colors: active) {
+	.wbc-grid .wbc-grid__step[aria-disabled="true"] {
+		color: GrayText;
+	}
 }
 
 .wbc-grid__step-value {
@@ -517,6 +528,29 @@
 	text-align: center;
 	font-size: 16px;
 	font-weight: 700;
+}
+
+/* Per-person-type counters: one row per type, a label with the price next to a stepper.
+   The container and labels are not clickable; the buttons are the same `.wbc-grid__step`
+   with the full set of states above, so no new control needs its own `:focus`/`:hover`.
+   Prefixed (0,2,0) like the tiles, so page-builder kits cannot reach the dimensions. */
+.wbc-grid .wbc-grid__persons {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.wbc-grid .wbc-grid__persons-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.wbc-grid .wbc-grid__persons-label {
+	font-size: 15px;
+	line-height: 1.3;
+	color: var(--wbc-text);
 }
 
 /* Duration select */
@@ -581,6 +615,19 @@
 
 .wbc-grid .wbc-grid__cta:active {
 	transform: translateY(0);
+	box-shadow: none;
+}
+
+/* Person-type counters: a party below the booking minimum blocks the CTA, at rest too. The rule
+   comes AFTER hover/focus: at equal specificity it wins on source order, so a blocked button
+   neither lights up nor lifts. The :focus-visible outline stays. */
+.wbc-grid .wbc-grid__cta--blocked,
+.wbc-grid .wbc-grid__cta--blocked:focus,
+.wbc-grid .wbc-grid__cta--blocked:hover {
+	background: var(--wbc-line);
+	color: var(--wbc-text-soft);
+	cursor: not-allowed;
+	transform: none;
 	box-shadow: none;
 }
 
@@ -1022,5 +1069,18 @@ body.wbc-grid-modal-open {
 	   clicked in the first place. Browsers without `:has()` keep the pre-fix behaviour. */
 	.wbc-grid__nav:has(.wbc-grid__month-select:focus-visible) {
 		top: 90px;
+	}
+
+	/* Person-type counters: the group spans the full card width, the label ABOVE the stepper.
+	   At 375px a label like "Children · 50.00" next to the stepper would push the
+	   card sideways. */
+	.wbc-grid .wbc-grid__persons {
+		width: 100%;
+	}
+
+	.wbc-grid .wbc-grid__persons-row {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 4px;
 	}
 }

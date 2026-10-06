@@ -32,6 +32,9 @@ final class WBC_Plugin {
 	/** @var WBC_Hold */
 	private $hold;
 
+	/** @var WBC_Vendor_Strings */
+	private $vendor_strings;
+
 	/** @var WBC_Events */
 	private $events;
 
@@ -70,8 +73,12 @@ final class WBC_Plugin {
 		$this->config      = new WBC_Config( $this->wpml_guard );
 		$this->cache_flush = new WBC_Cache_Flush( $this->config, $this->wpml_guard );
 
-		// Deferred price choke-point — instantiated but not hooked in slice 1 (no pricing logic yet).
+		// Read layer for person-type prices shown on the card; pricing itself stays in Bookings.
 		$this->cost = new WBC_Cost();
+
+		// Polish wording for the Bookings cart refusals (vendor ships no pl_PL). Front + cart.
+		$this->vendor_strings = new WBC_Vendor_Strings();
+		$this->vendor_strings->register();
 
 		// Special-event runtime (capacity cap + whole-evening exclusivity). Front + REST, so wired
 		// unconditionally; the three filters self-guard on the event-capacity meta.

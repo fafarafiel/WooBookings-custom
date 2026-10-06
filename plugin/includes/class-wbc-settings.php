@@ -32,6 +32,7 @@ final class WBC_Settings {
 		add_action( 'admin_notices', array( $this, 'unconfigured_notice' ) );
 		add_action( 'admin_notices', array( $this, 'event_misconfig_notice' ) );
 		add_action( 'admin_notices', array( $this, 'exclusivity_notice' ) );
+		add_action( 'admin_notices', array( $this, 'config_health_notice' ) );
 	}
 
 	/**
@@ -365,6 +366,202 @@ final class WBC_Settings {
 			esc_html__( 'check the availability rules of the products below:', 'woobookings-custom' ),
 			$items // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- each item escaped above.
 		);
+	}
+
+	/**
+	 * Configuration health of the booking products (misconfiguration must be loud).
+	 * Each section validates one feature and reports independently of the others:
+	 * person-type pricing (v1.2) and dated host exceptions (v1.3).
+	 *
+	 * Screen-gated like exclusivity_notice — it loads every booking product.
+	 *
+	 * @return void
+	 */
+	public function config_health_notice() {
+		if ( ! current_user_can( self::CAPABILITY ) || ! function_exists( 'get_current_screen' ) || ! function_exists( 'wc_get_product' ) ) {
+			return;
+		}
+		$screen  = get_current_screen();
+		$allowed = array( 'product', 'edit-product', 'woocommerce_page_' . self::PAGE_SLUG );
+		if ( ! is_object( $screen ) || ! in_array( $screen->id, $allowed, true ) ) {
+			return;
+		}
+
+		$problems = array_merge(
+			$this->check_person_pricing( $this->booking_product_ids() ),
+			$this->check_host_exceptions( $this->booking_product_ids() )
+		);
+
+		foreach ( array( 'error', 'warning' ) as $level ) {
+			$items = '';
+			foreach ( $problems as $problem ) {
+				if ( $level === $problem['level'] ) {
+					$items .= '<li>' . esc_html( $problem['text'] ) . '</li>';
+				}
+			}
+			if ( '' === $items ) {
+				continue;
+			}
+			printf(
+				'<div class="notice notice-%s"><p><strong>%s</strong> %s</p><ul style="list-style:disc;margin-left:2em;">%s</ul></div>',
+				esc_attr( $level ),
+				esc_html__( 'WooBookings Custom, product configuration:', 'woobookings-custom' ),
+				'error' === $level
+					? esc_html__( 'these settings produce a wrong price or block booking:', 'woobookings-custom' )
+					: esc_html__( 'check these settings:', 'woobookings-custom' ),
+				$items // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- each item escaped above.
+			);
+		}
+	}
+
+	/**
+	 * Every product the health checks must see: published, draft and private, in every
+	 * language. NOT get_product_ids() — that is the discovery output and only holds published
+	 * canonical products, so a draft copy or a translation would be invisible.
+	 *
+	 * @return int[]
+	 */
+	private function booking_product_ids() {
+		static $ids = null;
+		if ( null === $ids ) {
+			$ids = array_map(
+				'intval',
+				get_posts(
+					array(
+						'post_type'        => 'product',
+						'post_status'      => array( 'publish', 'draft', 'private' ),
+						'posts_per_page'   => -1,
+						'fields'           => 'ids',
+						'suppress_filters' => true,
+						// Only bookable products: the notice runs on every product screen load.
+						'tax_query'        => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_tax_query
+							array(
+								'taxonomy' => 'product_type',
+								'field'    => 'slug',
+								'terms'    => 'booking',
+							),
+						),
+					)
+				)
+			);
+		}
+		return $ids;
+	}
+
+	/**
+	 * Person-type pricing that the grid cannot sell correctly.
+	 *
+	 * With the person cost multiplier Bookings multiplies the product/resource cost by the head
+	 * count AND adds each type's own cost on top (cost-calculation.php:311-315). A type price
+	 * next to a non-zero product price is therefore charged twice: 2 adults + 1 child at
+	 * 100/50 with a 100 block cost = 550 instead of 250.
+	 *
+	 * @param int[] $ids Product IDs to validate.
+	 * @return array<int,array{level:string,text:string}>
+	 */
+	public function check_person_pricing( array $ids ) {
+		$problems = array();
+
+		foreach ( $ids as $pid ) {
+			$product = wc_get_product( $pid );
+			if ( ! is_object( $product ) || ! is_a( $product, 'WC_Product_Booking' ) || ! $product->has_person_types() ) {
+				continue;
+			}
+
+			$name  = $product->get_name();
+			$types = (array) $product->get_person_types();
+
+			// Bookings reads persons only with "Has persons" on (wc-bookings-functions.php:1576):
+			// the grid would show type prices, the cart would ignore the types and charge the
+			// product price, which is 0 on a product configured for person-type pricing.
+			if ( ! $product->get_has_persons() ) {
+				$problems[] = array(
+					'level' => 'error',
+					/* translators: %s: product name */
+					'text'  => sprintf( __( '"%s": "Has person types" is on but "Has persons" is off, so the cart ignores person types and prices the booking without them. Turn on "Has persons" or turn off person types.', 'woobookings-custom' ), $name ),
+				);
+				continue;
+			}
+
+			if ( empty( $types ) ) {
+				$problems[] = array(
+					'level' => 'error',
+					/* translators: %s: product name */
+					'text'  => sprintf( __( '"%s": person types are on but the product has no type, so customers cannot book it. Add person types or turn the field off.', 'woobookings-custom' ), $name ),
+				);
+				continue;
+			}
+
+			$priced = false;
+			foreach ( $types as $type ) {
+				if ( ! is_object( $type ) ) {
+					continue;
+				}
+				if ( (float) $type->get_cost() > 0 || (float) $type->get_block_cost() > 0 ) {
+					$priced = true;
+					continue;
+				}
+				$problems[] = array(
+					'level' => 'warning',
+					/* translators: 1: product name, 2: person type name */
+					'text'  => sprintf( __( '"%1$s": person type "%2$s" has a price of 0.', 'woobookings-custom' ), $name, $type->get_name() ),
+				);
+			}
+
+			if ( ! $priced ) {
+				continue;
+			}
+
+			if ( $product->get_has_person_cost_multiplier() && $this->has_shared_cost( $product ) ) {
+				$problems[] = array(
+					'level' => 'error',
+					/* translators: %s: product name */
+					'text'  => sprintf( __( '"%s": the price is charged twice. Person types have their own prices, and the product also has a base, block or resource cost or Costs table rules, multiplied by the number of people. With prices on person types, set the product costs to 0.', 'woobookings-custom' ), $name ),
+				);
+			}
+
+			if ( (float) $product->get_price() <= 0 ) {
+				$problems[] = array(
+					'level' => 'warning',
+					/* translators: %s: product name */
+					'text'  => sprintf( __( '"%s": the shop shows a price of 0 although person types have prices. Save the product again so WooCommerce recalculates the displayed price.', 'woobookings-custom' ), $name ),
+				);
+			}
+		}
+
+		return $problems;
+	}
+
+	/**
+	 * Dated host exceptions pointing at a slot the schedule no longer has.
+	 *
+	 * @param int[] $ids Product IDs to validate.
+	 * @return array<int,array{level:string,text:string}>
+	 */
+	public function check_host_exceptions( array $ids ) {
+		unset( $ids );
+		return array();
+	}
+
+	/**
+	 * Whether the product carries a cost the engine multiplies by the head count: product base
+	 * or block cost, any cost rule, or a resource cost.
+	 *
+	 * @param object $product WC_Product_Booking.
+	 * @return bool
+	 */
+	private function has_shared_cost( $product ) {
+		if ( (float) $product->get_cost() > 0 || (float) $product->get_block_cost() > 0 || ! empty( $product->get_costs() ) ) {
+			return true;
+		}
+		if ( $product->has_resources() ) {
+			foreach ( (array) $product->get_resources() as $resource ) {
+				if ( is_object( $resource ) && ( (float) $resource->get_base_cost() > 0 || (float) $resource->get_block_cost() > 0 ) ) {
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	/**

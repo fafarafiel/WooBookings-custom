@@ -318,7 +318,50 @@ final class WBC_Grid_Data {
 			'hosts'           => $this->host_map( $canonical_id ),
 		);
 
+		// Additive key (v1.2): present only when the product has person types, so an older
+		// grid.js and every product without types see the payload exactly as before.
+		$person_types = $this->person_types( $product, $canonical_product );
+		if ( ! empty( $person_types ) ) {
+			$descriptor['personTypes'] = $person_types;
+		}
+
 		return $descriptor;
+	}
+
+	/**
+	 * Person types for the card's counters, read off the product that RECEIVES the add-to-cart:
+	 * the field name carries that product's own person-type ID. The canonical product is the
+	 * reference for numbers; a divergence (an untranslated price or minimum on a WCML copy) is
+	 * logged and the target product wins, because that is the one the cart will validate against.
+	 *
+	 * @param WC_Product $product           Add-to-cart target (translation or canonical).
+	 * @param WC_Product $canonical_product Canonical (source-language) product.
+	 * @return array<int,array<string,mixed>>
+	 */
+	private function person_types( $product, $canonical_product ) {
+		$types = WBC_Cost::person_type_prices( $product );
+		if ( empty( $types ) || $canonical_product === $product ) {
+			return $types;
+		}
+
+		// A sorted list of the numbers only: type names may be translated on the WCML copy and
+		// the sort order may differ, neither of which is a divergence.
+		$numbers = static function ( $list ) {
+			$out = array();
+			foreach ( $list as $type ) {
+				$out[] = wp_json_encode( array( $type['min'], $type['max'], $type['unitPrice'] ) );
+			}
+			sort( $out );
+			return $out;
+		};
+		$flag = 'wbc_person_types_diverge_' . (int) $product->get_id();
+		if ( $numbers( $types ) !== $numbers( WBC_Cost::person_type_prices( $canonical_product ) ) && ! get_transient( $flag ) ) {
+			// Once a day per product: the payload is built on every page view.
+			set_transient( $flag, 1, DAY_IN_SECONDS );
+			error_log( sprintf( '[woobookings-custom] person types of product %d differ from canonical %d, the card follows the add-to-cart target.', $product->get_id(), $canonical_product->get_id() ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+		}
+
+		return $types;
 	}
 
 	/**
@@ -431,27 +474,23 @@ final class WBC_Grid_Data {
 	}
 
 	/**
-	 * Native add-to-cart field names. Persons field depends on whether custom person types exist.
+	 * Native add-to-cart field names.
+	 *
+	 * With person types the single persons field does not exist: every type posts its own
+	 * `wc_bookings_field_persons_<id>` (descriptor `personTypes`). The field is then EMPTY on
+	 * purpose — an older grid.js posting the head count there sends no persons at all and the
+	 * cart refuses loudly ("minimum persons"). The pre-1.2 fallback sent everybody to the FIRST
+	 * type, which the cart accepted at the wrong price (2+1 = 300 instead of 250).
 	 *
 	 * @param object $product
 	 * @return array<string,string>
 	 */
 	private function form_fields( $product ) {
-		$person_field = 'wc_bookings_field_persons';
-
-		if ( method_exists( $product, 'has_person_types' ) && $product->has_person_types() && method_exists( $product, 'get_person_types' ) ) {
-			$types = $product->get_person_types();
-			if ( is_array( $types ) && ! empty( $types ) ) {
-				$first = reset( $types );
-				if ( is_object( $first ) && method_exists( $first, 'get_id' ) ) {
-					$person_field = 'wc_bookings_field_persons_' . (int) $first->get_id();
-				}
-			}
-		}
+		$has_types = WBC_Cost::uses_person_types( $product );
 
 		return array(
 			'start'    => 'wc_bookings_field_start_date_time',
-			'persons'  => $person_field,
+			'persons'  => $has_types ? '' : 'wc_bookings_field_persons',
 			'duration' => 'wc_bookings_field_duration',
 		);
 	}
@@ -583,6 +622,10 @@ final class WBC_Grid_Data {
 			'daypickerLabel' => __( 'Day selection', 'woobookings-custom' ),
 			'decrease'       => __( 'Fewer people', 'woobookings-custom' ),
 			'increase'       => __( 'More people', 'woobookings-custom' ),
+			/* translators: %s: person type name, e.g. "Adults" */
+			'decreaseType'   => __( 'Fewer: %s', 'woobookings-custom' ),
+			/* translators: %s: person type name, e.g. "Adults" */
+			'increaseType'   => __( 'More: %s', 'woobookings-custom' ),
 			'details'        => __( 'Session details', 'woobookings-custom' ),
 			// The number of minutes is NOT typed here. It comes from WBC_Hold, the same constant
 			// that drives the real expiry, so the copy cannot promise one thing while the system
