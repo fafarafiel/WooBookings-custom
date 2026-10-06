@@ -43,8 +43,7 @@ jobs:
 
       - name: Syntax check
         run: |
-          node --check plugin/assets/grid.js
-          node --check plugin/assets/slots.js
+          for f in plugin/assets/*.js; do node --check "$f"; done
 
       - name: Unit tests
         run: node --test tests/js/slots.test.js

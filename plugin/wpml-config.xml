@@ -1,0 +1,7 @@
+<wpml-config>
+	<custom-fields>
+		<!-- Dated host exceptions (1.3.0): the runtime reads them only from the source-language
+		     product, so a copy on a translation would be dead data and a false validator alarm. -->
+		<custom-field action="ignore">_woobookings_custom_host_exceptions</custom-field>
+	</custom-fields>
+</wpml-config>
