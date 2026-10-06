@@ -8,7 +8,7 @@
 defined( 'ABSPATH' ) || exit;
 
 /**
- * A WooCommerce sub-page ("Rezerwacja WooBookings Custom") exposing the resource anchor and optional product
+ * A WooCommerce sub-page ("WooBookings Custom") exposing the resource anchor and optional product
  * overrides. Empty overrides fall back to discovery. Gated on manage_woocommerce; saves through
  * the Settings API (core nonce), each field sanitized to an int.
  */
@@ -60,7 +60,7 @@ final class WBC_Settings {
 
 		printf(
 			'<div class="notice notice-error"><p><strong>%s</strong> %s</p><p><a class="button button-primary" href="%s">%s</a></p></div>',
-			esc_html__( 'Rezerwacja WooBookings Custom:', 'woobookings-custom' ),
+			esc_html__( 'WooBookings Custom:', 'woobookings-custom' ),
 			esc_html__( 'the plugin has no shared resource configured, or finds no product bound to it. The booking grid is empty and cache flushing does nothing.', 'woobookings-custom' ),
 			esc_url( $url ),
 			esc_html__( 'Configure the resource', 'woobookings-custom' )
@@ -189,7 +189,7 @@ final class WBC_Settings {
 
 			// An event with a cap but no product-level "bookable=yes" availability contributes zero
 			// blackout ranges, so whole-evening exclusivity silently vanishes while the cap still
-			// enforces (impl-review Faza 2, MEDIUM). "Unconfigured must be loud" — flag it.
+			// enforces. "Unconfigured must be loud", so flag it.
 			$has_bookable_window = false;
 			if ( method_exists( $product, 'get_availability' ) ) {
 				foreach ( (array) $product->get_availability() as $entry ) {
@@ -284,7 +284,7 @@ final class WBC_Settings {
 	 *       rule entirely — the blackout wipes the open product for the whole day, silently.
 	 * Coverage is judged ONLY between rules of the same day scope (plain time↔plain time, or
 	 * time:N↔time:N with the same N). Multiple rules, rrule/custom types or mismatched day
-	 * scopes get no verdict — a false alarm would train Anna to ignore the notice.
+	 * scopes get no verdict — a false alarm would train the shop owner to ignore the notice.
 	 *
 	 * Screen-gated via get_current_screen (unlike the two legacy notices above — deliberate):
 	 * this validation loads products and parses rules, so it runs only where the configuration
@@ -328,7 +328,7 @@ final class WBC_Settings {
 			$cer_entries = $this->bookable_yes_entries( $ceremony );
 
 			if ( empty( $cer_entries ) ) {
-				/* translators: %s: ceremony product name */
+				/* translators: %s: session product name */
 				$problems[] = sprintf( __( '"%s": the session has no bookable availability rule, so the exclusivity that replaces open entry has nothing to derive from. Open entry stays bookable during the session.', 'woobookings-custom' ), $ceremony->get_name() );
 				continue;
 			}
@@ -339,7 +339,7 @@ final class WBC_Settings {
 			}
 			if ( $this->covers_entire_window( $cer_entries[0], $flex_entries[0] ) ) {
 				$problems[] = sprintf(
-					/* translators: 1: ceremony product name, 2: ceremony rule from, 3: ceremony rule to, 4: open product name, 5: open rule from, 6: open rule to */
+					/* translators: 1: session product name, 2: session rule from, 3: session rule to, 4: open product name, 5: open rule from, 6: open rule to */
 					__( '"%1$s": the session rule (%2$s to %3$s) covers the entire open-entry window of "%4$s" (%5$s to %6$s). Open entry is suppressed completely and nobody can book it.', 'woobookings-custom' ),
 					$ceremony->get_name(),
 					(string) $cer_entries[0]['from'],
@@ -682,7 +682,7 @@ final class WBC_Settings {
 
 		// Judge only plain forward windows. A reverse rule (to < from = overnight, vendor-legal:
 		// "Reverse time rule", rule-manager :1170) leaves real bookable hours after midnight that
-		// this containment test cannot see — no verdict, never a false alarm (impl-review Fazy 2).
+		// this containment test cannot see — no verdict, never a false alarm.
 		if ( $covering_from >= $covering_to || $covered_from >= $covered_to ) {
 			return false;
 		}
@@ -712,8 +712,8 @@ final class WBC_Settings {
 	public function register_menu() {
 		add_submenu_page(
 			'woocommerce',
-			__( 'Rezerwacja WooBookings Custom', 'woobookings-custom' ),
-			__( 'Rezerwacja WooBookings Custom', 'woobookings-custom' ),
+			__( 'WooBookings Custom', 'woobookings-custom' ),
+			__( 'WooBookings Custom', 'woobookings-custom' ),
 			self::CAPABILITY,
 			self::PAGE_SLUG,
 			array( $this, 'render_page' )
@@ -770,8 +770,8 @@ final class WBC_Settings {
 		);
 
 		$this->add_field( WBC_Config::OPTION_RESOURCE, __( 'Shared resource ID', 'woobookings-custom' ) );
-		$this->add_field( WBC_Config::OPTION_FLEX, __( 'ID produktu „wynajem/flex" (puste = discovery)', 'woobookings-custom' ) );
-		$this->add_field( WBC_Config::OPTION_CEREMONY, __( 'ID produktu „ceremonia" (puste = discovery)', 'woobookings-custom' ) );
+		$this->add_field( WBC_Config::OPTION_FLEX, __( 'Flexible rental product ID (empty = detect automatically)', 'woobookings-custom' ) );
+		$this->add_field( WBC_Config::OPTION_CEREMONY, __( 'Session product ID (empty = detect automatically)', 'woobookings-custom' ) );
 
 		add_settings_field(
 			WBC_Config::OPTION_HORIZON,
@@ -859,7 +859,7 @@ final class WBC_Settings {
 		}
 
 		echo '<div class="wrap">';
-		echo '<h1>' . esc_html__( 'Rezerwacja WooBookings Custom — konfiguracja', 'woobookings-custom' ) . '</h1>';
+		echo '<h1>' . esc_html__( 'WooBookings Custom settings', 'woobookings-custom' ) . '</h1>';
 
 		echo '<form action="options.php" method="post">';
 		settings_fields( self::OPTION_GROUP );
@@ -869,11 +869,11 @@ final class WBC_Settings {
 
 		$product_ids = $this->config->get_product_ids();
 		echo '<hr />';
-		echo '<h2>' . esc_html__( 'Co widzi grid', 'woobookings-custom' ) . '</h2>';
+		echo '<h2>' . esc_html__( 'What the grid sees', 'woobookings-custom' ) . '</h2>';
 		echo '<p><strong>' . esc_html__( 'Resource:', 'woobookings-custom' ) . '</strong> ' . esc_html( (string) $this->config->get_resource_id() ) . '</p>';
-		echo '<p><strong>' . esc_html__( 'Produkty (kanon PL):', 'woobookings-custom' ) . '</strong> ' . esc_html( implode( ', ', array_map( 'strval', $product_ids ) ) ) . '</p>';
+		echo '<p><strong>' . esc_html__( 'Products (source language):', 'woobookings-custom' ) . '</strong> ' . esc_html( implode( ', ', array_map( 'strval', $product_ids ) ) ) . '</p>';
 		echo '<p><strong>' . esc_html__( 'Flex:', 'woobookings-custom' ) . '</strong> ' . esc_html( (string) $this->config->get_flex_product_id() );
-		echo ' &nbsp; <strong>' . esc_html__( 'Ceremonia:', 'woobookings-custom' ) . '</strong> ' . esc_html( (string) $this->config->get_ceremony_product_id() ) . '</p>';
+		echo ' &nbsp; <strong>' . esc_html__( 'Session:', 'woobookings-custom' ) . '</strong> ' . esc_html( (string) $this->config->get_ceremony_product_id() ) . '</p>';
 
 		echo '</div>';
 	}

@@ -1,0 +1,418 @@
+# Polish translation of WooBookings Custom.
+# This file is distributed under the same licence as the plugin (GPL-2.0-or-later).
+msgid ""
+msgstr ""
+"Project-Id-Version: WooBookings Custom 1.3.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-10-06 12:18+0200\n"
+"PO-Revision-Date: 2026-10-06 12:00+0200\n"
+"Last-Translator: WooBookings Custom\n"
+"Language-Team: Polish\n"
+"Language: pl_PL\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n==1 ? 0 : n%10>=2 && n%10<=4 && (n%100<12 || n%100>14) ? 1 : 2);\n"
+"X-Domain: woobookings-custom\n"
+
+msgid "Event capacity (seats)"
+msgstr "Limit miejsc (osoby)"
+
+msgid "How many people can book one slot of this session. Empty or 0 means the full capacity of the shared resource. This field only sets the seat limit; whether the session blocks the whole evening is decided by the \"Special event\" field below."
+msgstr "Ile osób może zarezerwować jeden termin tej sesji. Puste lub 0 oznacza pełną pojemność wspólnego zasobu. To pole ustawia tylko limit miejsc; o blokadzie całego wieczoru decyduje pole „Wydarzenie specjalne” poniżej."
+
+msgid "The \"Special event\" field does not apply to open entry."
+msgstr "Pole „Wydarzenie specjalne” nie dotyczy wejścia otwartego."
+
+msgid "Special event"
+msgstr "Wydarzenie specjalne"
+
+msgid "Blocks the whole evening: while this event runs, regular sessions and open entry are unavailable. Tick it for a one-off session with a guest host or any other event that should have the resource to itself."
+msgstr "Blokuje cały wieczór: w czasie tego wydarzenia zwykłe sesje i wejście otwarte są niedostępne. Zaznacz przy jednorazowej sesji z gościem albo innym wydarzeniu, które ma mieć zasób tylko dla siebie."
+
+msgid "h"
+msgstr "godz."
+
+msgid "Book"
+msgstr "Rezerwuj"
+
+msgid "Sold out"
+msgstr "Brak miejsc"
+
+msgid "Slot has passed"
+msgstr "Termin minął"
+
+msgid "People"
+msgstr "Liczba osób"
+
+msgid "Duration"
+msgstr "Czas trwania"
+
+msgid "seats"
+msgstr "miejsc"
+
+msgid "No slots on this day"
+msgstr "Brak terminów w tym dniu"
+
+msgid "Loading slots…"
+msgstr "Ładowanie terminów…"
+
+msgid "Could not load slots. Please refresh the page."
+msgstr "Nie można wczytać terminów. Odśwież stronę."
+
+msgid "Close"
+msgstr "Zamknij"
+
+msgid "Host:"
+msgstr "Prowadzący:"
+
+msgid "Day selection"
+msgstr "Wybór dnia"
+
+msgid "Fewer people"
+msgstr "Mniej osób"
+
+msgid "More people"
+msgstr "Więcej osób"
+
+#. translators: %s: person type name, e.g. "Adults"
+#, php-format
+msgid "Fewer: %s"
+msgstr "Mniej: %s"
+
+#. translators: %s: person type name, e.g. "Adults"
+#, php-format
+msgid "More: %s"
+msgstr "Więcej: %s"
+
+msgid "Session details"
+msgstr "Szczegóły sesji"
+
+msgid "Go to cart"
+msgstr "Zobacz koszyk"
+
+msgid "Could not add to cart."
+msgstr "Nie można dodać do koszyka."
+
+msgid "Earlier slots"
+msgstr "Wcześniejsze terminy"
+
+msgid "Later slots"
+msgstr "Późniejsze terminy"
+
+msgid "Month"
+msgstr "Miesiąc"
+
+msgid "no slots"
+msgstr "brak terminów"
+
+msgid "End of available slots."
+msgstr "To już ostatnie terminy."
+
+msgid "Earliest range."
+msgstr "To są najwcześniejsze terminy."
+
+#. translators: %d: number of slots, singular form.
+#, php-format
+msgid "%d slot"
+msgstr "%d termin"
+
+#. translators: %d: number of slots, the Polish form for 2 to 4 (shown on Polish sites only); other languages can repeat the plural.
+#, php-format
+msgctxt "slot count, few form"
+msgid "%d slots"
+msgstr "%d terminy"
+
+#. translators: %d: number of slots, plural form.
+#, php-format
+msgctxt "slot count, many form"
+msgid "%d slots"
+msgstr "%d terminów"
+
+#. translators: %d: minutes left to complete the booking.
+#, php-format
+msgid "Your slot is held. You have %d minutes to complete payment, after which the hold is released and the slot returns to the pool."
+msgstr "Termin jest zarezerwowany. Masz %d minut na dokończenie płatności, potem blokada wygasa, a termin wraca do puli."
+
+msgid "Monday"
+msgstr "Poniedziałek"
+
+msgid "Tuesday"
+msgstr "Wtorek"
+
+msgid "Wednesday"
+msgstr "Środa"
+
+msgid "Thursday"
+msgstr "Czwartek"
+
+msgid "Friday"
+msgstr "Piątek"
+
+msgid "Saturday"
+msgstr "Sobota"
+
+msgid "Sunday"
+msgstr "Niedziela"
+
+#. translators: %s: link to the host list.
+#, php-format
+msgid "No hosts yet. Add people in %s, then come back here to assign them to slots."
+msgstr "Nie ma jeszcze prowadzących. Dodaj osoby w sekcji %s, a potem wróć tutaj, żeby przypisać je do terminów."
+
+msgid "Hosts"
+msgstr "Prowadzący"
+
+msgid "Nobody (hide)"
+msgstr "Nikt (nie pokazuj)"
+
+msgid "Host (default)"
+msgstr "Prowadzący (domyślny)"
+
+msgid "The person leading every slot of this product. Their name appears on the grid card, and clicking it opens their biography. Leave empty to show nobody."
+msgstr "Osoba prowadząca wszystkie terminy tego produktu. Jej imię i nazwisko widać na karcie terminu, a kliknięcie otwiera biogram. Zostaw puste, żeby nikogo nie pokazywać."
+
+msgid "This product has no weekly schedule yet, so there are no slots to override. Set availability on the Availability tab and the list will appear here on its own."
+msgstr "Ten produkt nie ma jeszcze tygodniowego harmonogramu, więc nie ma terminów do nadpisania. Ustaw dostępność w zakładce „Dostępność”, a lista pojawi się tutaj sama."
+
+msgid "Same as default"
+msgstr "Jak domyślny"
+
+msgid "Who leads each slot"
+msgstr "Kto prowadzi każdy termin"
+
+msgid "This list comes straight from the product schedule: change the hours on the Availability tab and it changes here too. Fill in only the slots led by somebody other than the default."
+msgstr "Lista pochodzi wprost z harmonogramu produktu: zmiana godzin w zakładce „Dostępność” zmienia ją także tutaj. Uzupełnij tylko terminy prowadzone przez kogoś innego."
+
+msgid "Exceptions (a different person on a specific day) are set on the source-language version of this product."
+msgstr "Wyjątki (inna osoba w konkretnym dniu) ustawiasz w wersji tego produktu w języku źródłowym."
+
+msgid "Choose a person (empty removes the row)"
+msgstr "Wybierz osobę (puste usuwa wiersz)"
+
+msgid "this session does not run on that day"
+msgstr "ta sesja nie odbywa się w tym dniu"
+
+msgid "past date, the row will be skipped"
+msgstr "data z przeszłości, wiersz zostanie pominięty"
+
+msgid "Exceptions: a different person on a specific day"
+msgstr "Wyjątki: inna osoba w konkretnym dniu"
+
+msgid "For example, a guest leads one session. Choose a date, a time from the schedule and a person. The exception applies on that day only and disappears on its own afterwards."
+msgstr "Na przykład gość prowadzi jedną sesję. Wybierz datę, godzinę z harmonogramu i osobę. Wyjątek działa tylko tego dnia, a potem znika sam."
+
+#. translators: %d: number of rows
+#, php-format
+msgid "The last save skipped %d row(s): a past date, no person, or a time outside the schedule. Check the list below."
+msgstr "Ostatni zapis pominął wiersze (%d): data z przeszłości, brak osoby albo godzina spoza harmonogramu. Sprawdź listę poniżej."
+
+msgid "Date"
+msgstr "Data"
+
+msgid "Time"
+msgstr "Godzina"
+
+msgid "Person"
+msgstr "Osoba"
+
+msgid "Remove"
+msgstr "Usuń"
+
+#. translators: %d: person post ID
+#, php-format
+msgid "person unavailable (ID %d): publish them or choose someone else"
+msgstr "osoba niedostępna (ID %d): opublikuj ją albo wybierz kogoś innego"
+
+msgid "Add exception"
+msgstr "Dodaj wyjątek"
+
+msgid "this slot is no longer in the schedule: set it again or remove it"
+msgstr "tego terminu nie ma już w harmonogramie: ustaw go ponownie albo usuń"
+
+msgid "Host"
+msgstr "Prowadzący"
+
+msgid "Add new"
+msgstr "Dodaj nowego"
+
+msgid "Add host"
+msgstr "Dodaj prowadzącego"
+
+msgid "Edit host"
+msgstr "Edytuj prowadzącego"
+
+msgid "New host"
+msgstr "Nowy prowadzący"
+
+msgid "Search hosts"
+msgstr "Szukaj prowadzących"
+
+msgid "No hosts yet"
+msgstr "Nie ma jeszcze prowadzących"
+
+msgid "WooBookings Custom:"
+msgstr "WooBookings Custom:"
+
+msgid "the plugin has no shared resource configured, or finds no product bound to it. The booking grid is empty and cache flushing does nothing."
+msgstr "wtyczka nie ma skonfigurowanego wspólnego zasobu albo nie znajduje przypisanych do niego produktów. Grafik rezerwacji jest pusty, a czyszczenie pamięci podręcznej nic nie robi."
+
+msgid "Configure the resource"
+msgstr "Skonfiguruj zasób"
+
+#. translators: %s: product name
+#, php-format
+msgid "\"%s\": \"Special event\" is ticked on an open-entry product, which cannot block the evening. Untick the field."
+msgstr "„%s”: „Wydarzenie specjalne” jest zaznaczone przy wejściu otwartym, które nie może blokować wieczoru. Odznacz to pole."
+
+#. translators: %s: product name
+#, php-format
+msgid "\"%s\": \"Special event\" is ticked on a translation instead of the source product. The plugin reads the marker from the source, so this event will not block the evening. Tick it on the source-language product."
+msgstr "„%s”: „Wydarzenie specjalne” jest zaznaczone na tłumaczeniu, a nie na produkcie źródłowym. Wtyczka czyta znacznik z produktu źródłowego, więc to wydarzenie nie zablokuje wieczoru. Zaznacz je w wersji w języku źródłowym."
+
+#. translators: %s: product name
+#, php-format
+msgid "\"%s\": event capacity is set on a translation instead of the source product. The plugin reads capacity from the source, so the seat limit will not apply. Set the capacity on the source-language product."
+msgstr "„%s”: limit miejsc jest ustawiony na tłumaczeniu, a nie na produkcie źródłowym. Wtyczka czyta limit z produktu źródłowego, więc nie zadziała. Ustaw limit w wersji w języku źródłowym."
+
+#. translators: %s: product name
+#, php-format
+msgid "\"%s\": the event is not bound to the shared resource, so it will not appear in the grid."
+msgstr "„%s”: wydarzenie nie jest przypisane do wspólnego zasobu, więc nie pojawi się w grafiku."
+
+#. translators: %s: product name
+#, php-format
+msgid "\"%s\": the event has no price set (base, block, resource and person-type costs are all 0)."
+msgstr "„%s”: wydarzenie nie ma ceny (koszt bazowy, blokowy, zasobu i typów osób wynoszą 0)."
+
+#. translators: 1: product name, 2: event capacity, 3: resource capacity
+#, php-format
+msgid "\"%1$s\": event capacity (%2$d) exceeds resource capacity (%3$d)."
+msgstr "„%1$s”: limit miejsc wydarzenia (%2$d) przekracza pojemność zasobu (%3$d)."
+
+#. translators: %s: product name
+#, php-format
+msgid "\"%s\": the event has no bookable availability rule, so it will not block regular sessions or open entry in its slot."
+msgstr "„%s”: wydarzenie nie ma reguły dostępności pozwalającej na rezerwację, więc nie zablokuje zwykłych sesji ani wejścia otwartego w swoim terminie."
+
+#. translators: %s: product name
+#, php-format
+msgid "\"%s\": the product has no bookable availability rule, so it will not appear in the grid."
+msgstr "„%s”: produkt nie ma reguły dostępności pozwalającej na rezerwację, więc nie pojawi się w grafiku."
+
+msgid "WooBookings Custom, misconfigured event:"
+msgstr "WooBookings Custom, błędnie skonfigurowane wydarzenie:"
+
+msgid "fix the products below, otherwise they will not behave correctly in the grid:"
+msgstr "popraw poniższe produkty, inaczej nie będą działać poprawnie w grafiku:"
+
+#. translators: %s: session product name
+#, php-format
+msgid "\"%s\": the session has no bookable availability rule, so the exclusivity that replaces open entry has nothing to derive from. Open entry stays bookable during the session."
+msgstr "„%s”: sesja nie ma reguły dostępności pozwalającej na rezerwację, więc wyłączność, która zastępuje wejście otwarte, nie ma z czego powstać. Wejście otwarte pozostaje dostępne w czasie sesji."
+
+#. translators: 1: session product name, 2: session rule from, 3: session rule to, 4: open product name, 5: open rule from, 6: open rule to
+#, php-format
+msgid "\"%1$s\": the session rule (%2$s to %3$s) covers the entire open-entry window of \"%4$s\" (%5$s to %6$s). Open entry is suppressed completely and nobody can book it."
+msgstr "„%1$s”: reguła sesji (%2$s do %3$s) obejmuje całe okno wejścia otwartego „%4$s” (%5$s do %6$s). Wejście otwarte jest całkowicie wyłączone i nikt go nie zarezerwuje."
+
+msgid "WooBookings Custom, session exclusivity:"
+msgstr "WooBookings Custom, wyłączność sesji:"
+
+msgid "check the availability rules of the products below:"
+msgstr "sprawdź reguły dostępności poniższych produktów:"
+
+msgid "WooBookings Custom, product configuration:"
+msgstr "WooBookings Custom, konfiguracja produktów:"
+
+msgid "these settings produce a wrong price or block booking:"
+msgstr "te ustawienia dają złą cenę albo blokują rezerwację:"
+
+msgid "check these settings:"
+msgstr "sprawdź te ustawienia:"
+
+#. translators: %s: product name
+#, php-format
+msgid "\"%s\": \"Has person types\" is on but \"Has persons\" is off, so the cart ignores person types and prices the booking without them. Turn on \"Has persons\" or turn off person types."
+msgstr "„%s”: „Has person types” jest włączone, ale „Has persons” jest wyłączone, więc koszyk pomija typy osób i liczy cenę bez nich. Włącz „Has persons” albo wyłącz typy osób."
+
+#. translators: %s: product name
+#, php-format
+msgid "\"%s\": person types are on but the product has no type, so customers cannot book it. Add person types or turn the field off."
+msgstr "„%s”: typy osób są włączone, ale produkt nie ma żadnego typu, więc klienci nie mogą go zarezerwować. Dodaj typy osób albo wyłącz to pole."
+
+#. translators: 1: product name, 2: person type name
+#, php-format
+msgid "\"%1$s\": person type \"%2$s\" has a price of 0."
+msgstr "„%1$s”: typ osoby „%2$s” ma cenę 0."
+
+#. translators: %s: product name
+#, php-format
+msgid "\"%s\": the price is charged twice. Person types have their own prices, and the product also has a base, block or resource cost or Costs table rules, multiplied by the number of people. With prices on person types, set the product costs to 0."
+msgstr "„%s”: cena jest naliczana podwójnie. Typy osób mają własne ceny, a produkt ma też koszt bazowy, blokowy, zasobu albo reguły w tabeli Koszty, mnożone przez liczbę osób. Przy cenach w typach osób ustaw koszty produktu na 0."
+
+#. translators: %s: product name
+#, php-format
+msgid "\"%s\": the shop shows a price of 0 although person types have prices. Save the product again so WooCommerce recalculates the displayed price."
+msgstr "„%s”: sklep pokazuje cenę 0, choć typy osób mają ceny. Zapisz produkt ponownie, żeby WooCommerce przeliczył wyświetlaną cenę."
+
+#. translators: %s: product name
+#, php-format
+msgid "\"%s\": host exceptions are saved on a translation instead of the source product, so the grid will not see them. Set them on the source-language product."
+msgstr "„%s”: wyjątki prowadzących są zapisane na tłumaczeniu, a nie na produkcie źródłowym, więc grafik ich nie zobaczy. Ustaw je w wersji w języku źródłowym."
+
+#. translators: 1: product name, 2: number of exceptions
+#, php-format
+msgid "\"%1$s\": %2$d host exception(s) the site will not show (a time outside the schedule or an unavailable person). On those days the weekly host is shown; fix or remove the exception."
+msgstr "„%1$s”: wyjątki prowadzących, których strona nie pokaże (godzina spoza harmonogramu albo niedostępna osoba): %2$d. W te dni widać prowadzącego z harmonogramu tygodniowego; popraw albo usuń wyjątek."
+
+msgid "WooBookings Custom"
+msgstr "WooBookings Custom"
+
+msgid "Resource and product binding"
+msgstr "Powiązanie zasobu i produktów"
+
+msgid "Shared resource ID"
+msgstr "ID wspólnego zasobu"
+
+msgid "Flexible rental product ID (empty = detect automatically)"
+msgstr "ID produktu wynajmu elastycznego (puste = wykryj automatycznie)"
+
+msgid "Session product ID (empty = detect automatically)"
+msgstr "ID produktu sesji (puste = wykryj automatycznie)"
+
+msgid "Booking horizon (months)"
+msgstr "Horyzont rezerwacji (miesiące)"
+
+msgid "How far ahead a visitor can page through the grid. The real ceiling is also set by each product's own maximum bookable window (12 months by default); beyond it the grid shows no slots."
+msgstr "Jak daleko naprzód odwiedzający może przeglądać grafik. Górną granicę wyznacza też maksymalne okno rezerwacji każdego produktu (domyślnie 12 miesięcy); dalej grafik nie pokazuje terminów."
+
+msgid "The shared resource is the anchor: products bound to it are discovered automatically. Use the ID override only during a production cutover."
+msgstr "Wspólny zasób jest punktem odniesienia: przypisane do niego produkty są wykrywane automatycznie. Nadpisania ID używaj tylko podczas przełączania strony produkcyjnej."
+
+msgid "Insufficient permissions."
+msgstr "Brak uprawnień."
+
+msgid "WooBookings Custom settings"
+msgstr "Ustawienia WooBookings Custom"
+
+msgid "What the grid sees"
+msgstr "Co widzi grafik"
+
+msgid "Resource:"
+msgstr "Zasób:"
+
+msgid "Products (source language):"
+msgstr "Produkty (język źródłowy):"
+
+msgid "Flex:"
+msgstr "Wynajem elastyczny:"
+
+msgid "Session:"
+msgstr "Sesja:"
+
+msgid "WooBookings Custom requires WooCommerce and WooCommerce Bookings to be active."
+msgstr "WooBookings Custom wymaga aktywnych wtyczek WooCommerce i WooCommerce Bookings."
+
+
+

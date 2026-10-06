@@ -4,11 +4,11 @@
  *
  * Two mechanisms:
  *   1. own seat capacity for events (e.g. 10 on the 20-seat resource), driven by the
- *      event-capacity meta (WBC_Config::META_EVENT_CAPACITY) read on the CANONICAL PL product;
- *   2. the exclusivity hierarchy event > ceremonia > open (tiers 3 > 2 > 1): a product's slots
+ *      event-capacity meta (WBC_Config::META_EVENT_CAPACITY) read on the CANONICAL product;
+ *   2. the exclusivity hierarchy event > session > open (tiers 3 > 2 > 1): a product's slots
  *      are blacked out by the bookable windows of every product with a HIGHER tier. The event
- *      keeps its whole-evening exclusivity (Fin 2026-07-18) as the top tier; the ceremony
- *      replaces the open entry in its own slot (wejscie-open, K3) as the middle one. Since
+ *      keeps its whole-evening exclusivity as the top tier; a regular session replaces the open
+ *      entry in its own slot as the middle one. Since
  *      v1.1.0 the top tier comes from the explicit marker (WBC_Config::META_IS_EVENT), not
  *      from the capacity meta: regular sessions may carry a capacity too, so capacity alone
  *      no longer says "event".
@@ -28,7 +28,7 @@
  *      so the grid needs its own cap here. Runs AFTER WC_Bookings_Cache::set (:1110) → cache-safe.
  *   3. woocommerce_booking_get_availability_rules (class-wc-product-booking.php:1569,
  *      args: $rules, $for_resource, $product) — tier blackout. Sits ABOVE the display↔enforcement
- *      split (research wylacznosc-ceremonia-nad-wejsciem-open): both the slots endpoint and the
+ *      split: both the slots endpoint and the
  *      cart validation grow out of get_bookable_minute_blocks_for_date, so one filter covers both.
  *
  * @package WooBookings_Custom
@@ -123,7 +123,7 @@ final class WBC_Events {
 	}
 
 	/**
-	 * Filter 3 — tier blackout (event > ceremonia > open). For a product on the anchor resource,
+	 * Filter 3 — tier blackout (event > session > open). For a product on the anchor resource,
 	 * append bookable=no rules covering every bookable range of every product with a HIGHER tier,
 	 * at the END of the already-sorted rules array so they carry the highest override power. The
 	 * event (tier 3) comes back unchanged — nothing sits above it, so its blackout set is empty,
@@ -161,7 +161,7 @@ final class WBC_Events {
 	 * blacked out by everything with a tier strictly above its own, so the hierarchy
 	 * event > session > open entry falls out of a plain integer comparison.
 	 *
-	 * @param int $canon Canonical PL product ID.
+	 * @param int $canon Canonical product ID.
 	 * @return int
 	 */
 	private function tier( $canon ) {

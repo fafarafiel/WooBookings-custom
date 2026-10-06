@@ -140,8 +140,8 @@
 
 	/*
 	 * A failure (HTTP !ok, network throw, broken JSON) resolves to {ok:false} — DISTINCT from a
-	 * legally empty calendar. On the navigation path an empty week is meaningful ("Brak
-	 * slots") while an error must say so and must never be memoized; collapsing both to
+	 * legally empty calendar. On the navigation path an empty week is meaningful ("no slots"
+	 * on this day) while an error must say so and must never be memoized; collapsing both to
 	 * empty records would render a lying "no sessions" for a transient 500 and freeze it in
 	 * memo for the whole session.
 	 */
@@ -250,8 +250,8 @@
 	function currentRange() {
 		return {
 			min: days[0].key,
-			// Rule 15: the endpoint's max_date is EXCLUSIVE — the bound is the day AFTER the
-			// last tile, or the eighth day would be permanently empty (v1.0.4 class).
+			// The endpoint's max_date is EXCLUSIVE — the bound is the day AFTER the
+			// last tile, or the eighth day would be permanently empty (an off-by-one).
 			maxExcl: addDays(days[days.length - 1].key, 1)
 		};
 	}
@@ -368,7 +368,7 @@
 
 	// aria-disabled, never native disabled: the boundary is reached by repeatedly activating
 	// the SAME arrow, so the control goes inactive UNDER the keyboard focus — a natively
-	// disabled button would drop that focus to <body> (the v1.0.7/K8 defect class).
+	// disabled button would drop that focus to <body>.
 	function setPagerState(btn, enabled) {
 		if (enabled) {
 			btn.removeAttribute('aria-disabled');
@@ -438,16 +438,16 @@
 
 	/* -------------------------------------------------------- status announcements */
 
-	// Locale plural forms: languages with three forms use all of them, two-form languages use one and many.
+	// Plural forms: Polish uses all three (one, few, many); every other language uses one and many.
 	function slotCountPhrase(n) {
 		if (!n) {
 			return i18n('statusNone', 'no slots');
 		}
 		var form;
 		if (n === 1) {
-			form = i18n('slotOne', '%d termin');
+			form = i18n('slotOne', '%d slot');
 		} else if ('pl' === LANG && n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14)) {
-			form = i18n('slotFew', '%d terminy');
+			form = i18n('slotFew', '%d slots');
 		} else {
 			form = i18n('slotMany', '%d slots');
 		}
@@ -660,7 +660,7 @@
 
 		// The endpoint can report a negative available (non-atomic add-to-cart racing the same
 		// slot, or a capacity lowered under existing bookings — production shows available:-7 on
-		// WPML-duplicated products). Never let arithmetic like that reach the card as "-7/18 miejsc";
+		// WPML-duplicated products). Never let arithmetic like that reach the card as "-7/20 seats";
 		// clamp at zero, which also makes the slot read as full, exactly as it is.
 		var available = Math.max(0, toInt(slot.available, 0));
 		var booked = Math.max(0, toInt(slot.booked, 0));
@@ -711,7 +711,7 @@
 		var meta = el('div', 'wbc-grid__meta');
 		meta.appendChild(el('span', 'wbc-grid__duration', product.durationText));
 		var occ = el('span', 'wbc-grid__occupancy');
-		occ.textContent = available + '/' + total + ' ' + i18n('seats', 'miejsc');
+		occ.textContent = available + '/' + total + ' ' + i18n('seats', 'seats');
 		meta.appendChild(occ);
 		card.appendChild(meta);
 
@@ -741,7 +741,7 @@
 		// Classic form-POST to the native Woo add-to-cart handler — identical fields, identical
 		// vendor validation. NEVER the Store API — that path drops persons. When the browser
 		// can, the submit is intercepted and carried over fetch so the visitor stays on the
-		// list (K8); otherwise the native POST proceeds unchanged (progressive enhancement).
+		// list; otherwise the native POST proceeds unchanged (progressive enhancement).
 		var form = document.createElement('form');
 		form.className = 'wbc-grid__form';
 		form.method = 'post';
@@ -761,7 +761,7 @@
 			var personsHidden = hidden(product.fields.persons, '');
 			form.appendChild(personsHidden);
 
-			// Persons and duration are ORTHOGONAL, config-driven controls (K1): either, both or
+			// Persons and duration are ORTHOGONAL, config-driven controls: either, both or
 			// neither may exist. A control is appended only when it was built — with both fixed
 			// the card renders just the CTA. Appending an undefined control here would throw
 			// inside buildCard's loop and silently kill the whole list render.
@@ -825,7 +825,7 @@
 				return;
 			}
 		} catch (err) {
-			// przechodzimy do fallbacku
+			// fall through to the fallback below
 		}
 
 		var params = window.wc_cart_fragments_params || window.wc_add_to_cart_params;
@@ -848,7 +848,7 @@
 					var nodes = document.querySelectorAll(selector);
 					for (var i = 0; i < nodes.length; i++) {
 						/*
-						 * Granica zaufania: to HTML wygenerowany przez WooCommerce na TYM SAMYM
+						 * Trust boundary: this is HTML that WooCommerce generated on the
 						 * same origin, fetched with the authenticated session: byte for byte the
 						 * markup the vendor's own cart-fragments script injects with replaceWith().
 						 * Fragments ARE markup by definition (mini cart, counter), so escaping them
@@ -885,7 +885,7 @@
 		}
 		var close = el('button', 'wbc-grid__toast-close', '×');
 		close.type = 'button';
-		close.setAttribute('aria-label', i18n('close', 'Zamknij'));
+		close.setAttribute('aria-label', i18n('close', 'Close'));
 		close.addEventListener('click', function () {
 			roots.toast.textContent = '';
 		});
@@ -896,7 +896,7 @@
 	// The submit disabled the focused CTA (focus falls to <body>) and the rerender detached it.
 	// A keyboard user booking several slots in a row must not restart tabbing from the top of
 	// the page: focus goes back to the same slot's CTA, or to the toast when the slot is no
-	// longer bookable. Same defect class as the v1.0.7 Escape/OneTap fix — on the K8 path.
+	// longer bookable. Same defect class as focus lost on Escape, on the add to cart path.
 	function restoreFocusAfterRender(slot, product) {
 		var sel = '[data-slot-iso="' + cssEscape(slotIso(slot)) + '"][data-product-id="' + cssEscape(String(product.id)) + '"] .wbc-grid__cta';
 		var cta = roots.list.querySelector(sel);
@@ -914,7 +914,7 @@
 	 * first — availability changed server-side and every cached page may now lie; other pages
 	 * refetch lazily on their next visit. This path KEEPS the previous snapshot on an empty or
 	 * failed response (unlike navigation): a transient REST failure right after a success toast
-	 * would otherwise paint a sold-out sauna with no recovery, since selectDay never refetches.
+	 * would otherwise paint a sold-out week with no recovery, since selectDay never refetches.
 	 * The server stays the truth at add time either way.
 	 */
 	function refreshCurrentAfterCart(slot, product) {
@@ -947,7 +947,7 @@
 			};
 			if (modal && !modal.overlay.hidden) {
 				// Applying under an open modal would detach lastTrigger, and closeModal()
-				// would drop focus to <body> (v1.0.7 class) — defer until the modal closes.
+				// would drop focus to <body>, so defer until the modal closes.
 				pendingApply = apply;
 				return;
 			}
@@ -963,7 +963,7 @@
 		}
 		form.dataset.inflight = '1';
 		cta.disabled = true;
-		// Dodanie do koszyka bywa odczuwalnie wolne (POST + przeliczenie koszyka po stronie
+		// Adding to cart can be noticeably slow (a POST plus a server-side cart recalculation).
 		// Without a busy signal the person clicking cannot tell whether anything happened. The
 		// spinner carries that visually and aria-busy carries it for screen readers.
 		cta.classList.add('wbc-grid__cta--busy');
@@ -1012,7 +1012,7 @@
 					// The fallback copy deliberately omits the minute count. Hard-coding a number
 					// here would start lying the moment WBC_Hold::MINUTES changes, and a thinner
 					// message beats an untrue one.
-					showToast('success', i18n('addedToCart', 'Dodano do koszyka.'), true);
+					showToast('success', i18n('addedToCart', 'Added to cart.'), true);
 					// Refresh the header counter without reloading the page.
 					refreshCartFragments();
 					return refreshCurrentAfterCart(slot, product);
@@ -1335,7 +1335,7 @@
 		for (var v = min; v <= max; v += step) {
 			var opt = document.createElement('option');
 			opt.value = String(v);
-			opt.textContent = v + ' ' + i18n('hourShort', 'godz.');
+			opt.textContent = v + ' ' + i18n('hourShort', 'h');
 			select.appendChild(opt);
 		}
 		select.value = String(min);
@@ -1385,7 +1385,7 @@
 
 		var close = el('button', 'wbc-grid__modal-close');
 		close.type = 'button';
-		close.setAttribute('aria-label', i18n('close', 'Zamknij'));
+		close.setAttribute('aria-label', i18n('close', 'Close'));
 		close.appendChild(closeIcon());
 		close.addEventListener('click', closeModal);
 
@@ -1528,8 +1528,8 @@
 	function onModalKey(e) {
 		if (e.key === 'Escape') {
 			e.preventDefault();
-			// Stop here. The site's accessibility widget (OneTap Pro) also listens for Escape on
-			// the document and pulls focus onto its own toggle — which lands AFTER closeModal()
+			// Stop here. An accessibility widget on the page may also listen for Escape on
+			// the document and pull focus onto its own toggle — which lands AFTER closeModal()
 			// has correctly returned focus to the trigger, silently undoing it. A modal that
 			// consumes Escape must not let it reach global handlers.
 			e.stopPropagation();

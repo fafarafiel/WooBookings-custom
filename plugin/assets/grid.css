@@ -73,7 +73,7 @@
 	}
 }
 
-/* ------------------------------------------------------- nav shell (Faza 1) */
+/* ------------------------------------------------------- nav shell ---------- */
 
 /*
  * !important because author display rules on classes outsrank the user-agent
@@ -84,7 +84,7 @@
 	display: none !important;
 }
 
-/* Region statusu: czytelny dla AT, niewidoczny wizualnie (wzorzec sr-only). */
+/* Status region: readable by assistive technology, visually hidden (sr-only pattern). */
 .wbc-grid__status {
 	position: absolute;
 	width: 1px;
@@ -393,7 +393,7 @@
 }
 
 /*
- * Explicit hover/focus state in the copper accent (K7). The namespace prefix is load-bearing:
+ * Explicit hover/focus state in the copper accent. The namespace prefix is load-bearing:
  * (0,3,0) beats an Elementor kit's global `.elementor-kit-N button:hover` (0,2,1), which would
  * beat a bare `.wbc-grid__name:hover` (0,2,0) and bleed the theme's red into the grid.
  */

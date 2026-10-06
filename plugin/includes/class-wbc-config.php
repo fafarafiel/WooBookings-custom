@@ -11,7 +11,7 @@ defined( 'ABSPATH' ) || exit;
 
 /**
  * Reads the resource anchor from an option and discovers the flex + ceremony products sharing it.
- * All returned IDs are canonical PL. Getters are memoized (cheap on the hot path).
+ * All returned IDs are canonical. Getters are memoized (cheap on the hot path).
  */
 final class WBC_Config {
 
@@ -30,7 +30,7 @@ final class WBC_Config {
 	 * single source of the capacity cap read by both runtime filters. Since v1.1.0 it says nothing
 	 * about exclusivity: regular sessions may carry a cap too; see META_IS_EVENT.
 	 * Not a product ID and not a taxonomy term (a category would be WPML-translated and break the
-	 * marker under EN/DE) — a hidden postmeta (leading underscore) travels on the canonical product.
+	 * marker in other languages) — a hidden postmeta (leading underscore) travels on the canonical product.
 	 */
 	const META_EVENT_CAPACITY = '_woobookings_custom_event_capacity';
 
@@ -149,7 +149,7 @@ final class WBC_Config {
 	}
 
 	/**
-	 * Canonical PL IDs of the bookable products on the resource. Option first; on miss, discover
+	 * Canonical IDs of the bookable products on the resource. Option first; on miss, discover
 	 * by resource and cache the result.
 	 *
 	 * @return int[]
@@ -165,9 +165,9 @@ final class WBC_Config {
 		/*
 		 * The cache is stamped with the resource it was discovered for. Without that stamp this
 		 * option is a cache with no invalidation, and the cutover sequence walks straight into it:
-		 * set resource_id BEFORE creating the ceremony product and discovery freezes [320] forever
-		 * is_configured() would then report true, the misconfiguration notice would go quiet, and the grid would ship
-		 * without ceremonies. A stale stamp must lose to a re-discovery, never win.
+		 * set resource_id BEFORE creating the ceremony product and discovery freezes a list without
+		 * it forever. is_configured() would then report true, the misconfiguration notice would go
+		 * quiet, and the grid would ship without ceremonies. A stale stamp must lose to a re-discovery, never win.
 		 */
 		if ( isset( $stored['resource'], $stored['ids'] ) && (int) $stored['resource'] === $resource && is_array( $stored['ids'] ) ) {
 			$this->product_ids = array_values( array_unique( array_map( 'intval', $stored['ids'] ) ) );
@@ -240,9 +240,9 @@ final class WBC_Config {
 
 	/**
 	 * Event seat cap for a product, or 0 when it is not an event. Always resolved on the CANONICAL
-	 * PL product: the runtime filters (Faza 2) receive the translated product on EN/DE checkout, and
+	 * (default-language) product: the runtime filters receive the translated product on a translated checkout, and
 	 * WPML need not copy this meta to the translation, so reading the raw passed ID would lose the
-	 * cap under EN/DE. Canonicalizing here makes every caller safe regardless of what it passes.
+	 * cap in other languages. Canonicalizing here makes every caller safe regardless of what it passes.
 	 * Memoized per canonical ID (cheap on the hot path).
 	 *
 	 * @param int $id Product ID (any language).
@@ -295,7 +295,7 @@ final class WBC_Config {
 
 	/**
 	 * Discover bookable products whose resource set contains the anchor resource. Uses only the
-	 * product API (no raw SQL). Returns canonical PL IDs.
+	 * product API (no raw SQL). Returns canonical IDs.
 	 *
 	 * @param int $resource_id
 	 * @return int[]
@@ -312,9 +312,9 @@ final class WBC_Config {
 		 * Language-agnostic query, mirroring the vendor's own booking-products lookup
 		 * (class-wc-product-booking-data-store-cpt.php:335-358): get_posts with
 		 * suppress_filters => true so WPML does not scope the result set to the current request
-		 * language. wc_get_products() (the old call here) IS WPML-scoped — under EN/DE it returns
+		 * language. wc_get_products() (the old call here) IS WPML-scoped: in another language it returns
 		 * only translated products, so an event that exists in the source language alone
-		 * would never be discovered on the EN/DE grid (kryterium 5). Product types come from the
+		 * would never be discovered on a translated grid. Product types come from the
 		 * vendor helper so an accommodation-booking add-on would be covered too; the object guard
 		 * below still narrows to real WC_Product_Booking instances.
 		 */
@@ -385,7 +385,7 @@ final class WBC_Config {
 	}
 
 	/**
-	 * First product ID of a given type, canonical PL.
+	 * First product ID of a given type, canonical.
 	 *
 	 * @param string $type
 	 * @return int

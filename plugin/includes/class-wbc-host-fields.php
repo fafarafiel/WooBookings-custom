@@ -7,8 +7,8 @@
  * availability rules, so nobody ever types a date or an hour. They pick a person next to a slot
  * the system already knows about, and changing the schedule rebuilds the list automatically.
  *
- * Real schedules are lopsided. In the reference deployment seven products held eighteen weekly
- * slots, and three of them ran once a week, where per-slot and per-product are the same thing.
+ * Real schedules are lopsided: several products often run only once a week, where per-slot and
+ * per-product are the same thing.
  * Hence the DEFAULT field for the whole product: the common case costs one choice per product,
  * with overrides only where somebody genuinely differs.
  *

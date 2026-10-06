@@ -14,7 +14,7 @@ defined( 'ABSPATH' ) || exit;
  * releases the seats once the window expires.
  *
  * This class does two things and both must quote the SAME number of minutes:
- *   1. skraca vendorowe okno z 60 do naszego,
+ *   1. it shortens the vendor's 60 minute window to ours,
  *   2. it hands that value to the presentation layer, so the message a customer reads cannot
  *      drift away from the real expiry.
  *
@@ -53,7 +53,7 @@ final class WBC_Hold {
 	}
 
 	/**
-	 * Zdanie pokazywane klientowi po dodaniu do koszyka.
+	 * The sentence shown to the customer after adding to cart.
 	 *
 	 * The number is injected with sprintf from the same constant that drives the filter, so
 	 * changing it moves the real expiry and the customer-facing copy together. A translator

@@ -62,8 +62,9 @@ final class WBC_Cache_Flush {
 		add_action( 'untrashed_post', array( $this, 'flush_if_booking' ), 10, 1 );
 
 		/*
-		 * Hold expiry — the P24 path, and the one no hook above reaches. The cron calls core
-		 * wp_delete_post() directly (class-wc-booking-cron-manager.php:93), which:
+		 * Hold expiry, for example an online payment that is never completed, is the one path no
+		 * hook above reaches. The cron calls core wp_delete_post() directly
+		 * (class-wc-booking-cron-manager.php:93), which:
 		 *   - bypasses the data store, so 'woocommerce_delete_booking' (only do_action site is
 		 *     class-wc-booking-data-store.php:252) never fires;
 		 *   - never routes to the trash, because core sends only 'post' and 'page' to wp_trash_post()
@@ -79,10 +80,10 @@ final class WBC_Cache_Flush {
 		add_action( 'before_delete_post', array( $this, 'flush_if_booking' ), 10, 1 );
 
 		/*
-		 * CONFIGURATION save, not just booking teardown
-		 * wejscie-open). Under the tier hierarchy the open product's slots are DERIVED from the
-		 * ceremony's availability rules, while the vendor's save path clears only the saved
-		 * product's own transient (data-stores/class-wc-product-booking-data-store-cpt.php:107)
+		 * CONFIGURATION save, not just booking teardown. Under the tier hierarchy the open
+		 * product's slots are DERIVED from the ceremony's availability rules, while the vendor's
+		 * save path clears only the saved product's own transient
+		 * (data-stores/class-wc-product-booking-data-store-cpt.php:107)
 		 * and clear_cache() on save_post does not touch booking_slots_ transients
 		 * (vendor cache class). An editor changing a session's hours would leave
 		 * the open product's slots stale for the full TTL (collective transient 1h). Any anchor
@@ -97,8 +98,8 @@ final class WBC_Cache_Flush {
 	 * Collect a saved product for the DEFERRED configuration flush. The actual flush must not
 	 * run here: save_post_product fires BEFORE the meta-box/CRUD writes land (resource pinning,
 	 * availability, product type term), so reading get_product_ids() mid-save would trigger
-	 * discovery against half-written state and PERSIST that stale list in the discovery option
-	 * (impl-review Fazy 2, MAJOR). Deferring to shutdown reads the world only after every write
+	 * discovery against half-written state and PERSIST that stale list in the discovery option.
+	 * Deferring to shutdown reads the world only after every write
 	 * of the request has landed — that also covers trashing an anchor product (post-save
 	 * discovery no longer lists it, but the flush must still fire for its siblings).
 	 *

@@ -2,7 +2,7 @@
 /**
  * Grid data — builds the server payload consumed by grid.js via wp_localize_script.
  *
- * The WPML seam of the whole plasterek: availability axis on canonical PL IDs, user-facing
+ * The WPML seam of the whole feature: availability axis on canonical IDs, user-facing
  * axis (label/description/url) from the translated product for the page language.
  * A booking is never a WPML-re-synced entity.
  *
@@ -180,9 +180,9 @@ final class WBC_Grid_Data {
 
 	/**
 	 * Pure month-forward arithmetic. PHP's native `+N month` overflows the day-of-month
-	 * (Aug 31 + 3 months = Dec 1) — same boundary class as the v1.0.4 off-by-one — so an
+	 * (Aug 31 + 3 months = Dec 1) — a classic boundary off-by-one, so an
 	 * overflow clamps to the last day of the INTENDED target month. Static and WP-free on
-	 * purpose: testable in a bare CLI harness with mocked dates (kryterium 1.1).
+	 * purpose: testable in a bare CLI harness with mocked dates.
 	 *
 	 * @param DateTimeImmutable $today  Base day (midnight).
 	 * @param int               $months Months forward.
@@ -265,7 +265,7 @@ final class WBC_Grid_Data {
 
 	/**
 	 * Genitive month names 1..12 (index 0 = January) for date-range phrases ("12–19 sierpnia").
-	 * PL has a real genitive in WP_Locale; EN/DE fall back to the nominative naturally.
+	 * PL has a real genitive in WP_Locale; languages without one fall back to the nominative.
 	 *
 	 * @return string[]
 	 */
@@ -337,8 +337,8 @@ final class WBC_Grid_Data {
 	}
 
 	/**
-	 * Build one product descriptor. Availability keys on canonical PL; presentation comes from the
-	 * translated product. Missing translation → graceful fallback to canonical (no fatal).
+	 * Build one product descriptor. Availability keys on the canonical product; presentation comes
+	 * from the translated product. Missing translation → graceful fallback to canonical (no fatal).
 	 *
 	 * @param int         $canonical_id
 	 * @param string|null $lang
@@ -358,7 +358,7 @@ final class WBC_Grid_Data {
 		}
 
 		/*
-		 * Numbers are read off the canonical PL product; presentation (label,
+		 * Numbers are read off the canonical product; presentation (label,
 		 * description, url, add-to-cart id) off the translation. The anchor
 		 * resource is untranslatable (pule-jezykowe), so every language product
 		 * shares one resource and a translation resolves the same shared resource
@@ -454,7 +454,7 @@ final class WBC_Grid_Data {
 	 * translation is invisible to the runtime, and that is deliberate: a person's name is one
 	 * string across every language.
 	 *
-	 * @param int $canonical_id ID produktu na kanonie PL.
+	 * @param int $canonical_id Product ID in the source language.
 	 * @return array{name:string,bio:string,image:array|null}|null
 	 */
 	private function host_default( $canonical_id ) {
@@ -471,7 +471,7 @@ final class WBC_Grid_Data {
 	 * Entries pointing at a deleted or unpublished person are dropped here rather than on the
 	 * front end: the client receives display-ready data only and never needs to know the registry.
 	 *
-	 * @param int $canonical_id ID produktu na kanonie PL.
+	 * @param int $canonical_id Product ID in the source language.
 	 * @return array<string,array{name:string,bio:string,image:array|null}>
 	 */
 	private function host_map( $canonical_id ) {
@@ -499,11 +499,11 @@ final class WBC_Grid_Data {
 	}
 
 	/**
-	 * Persons control is data-driven (K1): the stepper exists exactly when the Bookings
+	 * Persons control is data-driven: the stepper exists exactly when the Bookings
 	 * configuration leaves the customer a real choice (min < max). Equal bounds mean the
 	 * count is fixed by configuration — no control, the hidden field carries the value.
 	 * Product type deliberately plays no part here: wp-admin steers the behaviour
-	 * (wymaganie klientki #4), so flipping min/max toggles the stepper without code.
+	 * (a deliberate requirement), so flipping min/max toggles the stepper without code.
 	 *
 	 * @param int $min
 	 * @param int $max
@@ -542,8 +542,7 @@ final class WBC_Grid_Data {
 				'step'    => 1,
 				// Real block size in duration units. The select always steps blocks by 1, but the
 				// grid's duration clamp is only valid when one block == one hour == slot spacing;
-				// a 2-hour-block config must disable the clamp, and a hardcoded step can't say so
-				// (impl-review Fazy 2, MEDIUM).
+				// a 2-hour-block config must disable the clamp, and a hardcoded step can't say so.
 				'block'   => $this->int_call( $product, 'get_duration', 1 ),
 				'unit'    => $unit,
 			);
@@ -604,7 +603,7 @@ final class WBC_Grid_Data {
 	 * @return string
 	 */
 	private function duration_text( $product, $type ) {
-		$unit_label = __( 'godz.', 'woobookings-custom' );
+		$unit_label = __( 'h', 'woobookings-custom' );
 
 		if ( 'flex' === $type ) {
 			$min = $this->int_call( $product, 'get_min_duration', 1 );
@@ -620,7 +619,8 @@ final class WBC_Grid_Data {
 	}
 
 	/**
-	 * Optional per-person rate for future card pricing (not rendered in slice 1).
+	 * Optional base per-person rate in the payload. The card does not render it; person-type
+	 * prices on the card come from WBC_Cost.
 	 *
 	 * @param object $product
 	 * @return float|null
@@ -691,16 +691,16 @@ final class WBC_Grid_Data {
 	private function build_i18n() {
 		return array(
 			'book'           => __( 'Book', 'woobookings-custom' ),
-			'full'           => __( 'Brak miejsc', 'woobookings-custom' ),
+			'full'           => __( 'Sold out', 'woobookings-custom' ),
 			'past'           => __( 'Slot has passed', 'woobookings-custom' ),
 			'persons'        => __( 'People', 'woobookings-custom' ),
 			'duration'       => __( 'Duration', 'woobookings-custom' ),
-			'hourShort'      => __( 'godz.', 'woobookings-custom' ),
-			'seats'          => __( 'miejsc', 'woobookings-custom' ),
+			'hourShort'      => __( 'h', 'woobookings-custom' ),
+			'seats'          => __( 'seats', 'woobookings-custom' ),
 			'noSlots'        => __( 'No slots on this day', 'woobookings-custom' ),
 			'loading'        => __( 'Loading slots…', 'woobookings-custom' ),
 			'error'          => __( 'Could not load slots. Please refresh the page.', 'woobookings-custom' ),
-			'close'          => __( 'Zamknij', 'woobookings-custom' ),
+			'close'          => __( 'Close', 'woobookings-custom' ),
 			'hostLabel'      => __( 'Host:', 'woobookings-custom' ),
 			'daypickerLabel' => __( 'Day selection', 'woobookings-custom' ),
 			'decrease'       => __( 'Fewer people', 'woobookings-custom' ),
@@ -716,7 +716,7 @@ final class WBC_Grid_Data {
 			'addedToCart'    => WBC_Hold::notice_text(),
 			'goToCart'       => __( 'Go to cart', 'woobookings-custom' ),
 			'addError'       => __( 'Could not add to cart.', 'woobookings-custom' ),
-			// Nawigacja stronami dni (kroki to 8-dniowe strony, nie kalendarzowe tygodnie — copy
+			// Day page navigation (steps are 8-day pages, not calendar weeks, so the copy
 			// deliberately talks about slots, not weeks).
 			'prevDays'       => __( 'Earlier slots', 'woobookings-custom' ),
 			'nextDays'       => __( 'Later slots', 'woobookings-custom' ),
@@ -726,9 +726,12 @@ final class WBC_Grid_Data {
 			'statusNone'     => __( 'no slots', 'woobookings-custom' ),
 			'statusEnd'      => __( 'End of available slots.', 'woobookings-custom' ),
 			'statusStart'    => __( 'Earliest range.', 'woobookings-custom' ),
-			'slotOne'        => __( '%d termin', 'woobookings-custom' ),
-			'slotFew'        => __( '%d terminy', 'woobookings-custom' ),
-			'slotMany'       => __( '%d slots', 'woobookings-custom' ),
+			/* translators: %d: number of slots, singular form. */
+			'slotOne'        => __( '%d slot', 'woobookings-custom' ),
+			/* translators: %d: number of slots, the Polish form for 2 to 4 (shown on Polish sites only); other languages can repeat the plural. */
+			'slotFew'        => _x( '%d slots', 'slot count, few form', 'woobookings-custom' ),
+			/* translators: %d: number of slots, plural form. */
+			'slotMany'       => _x( '%d slots', 'slot count, many form', 'woobookings-custom' ),
 		);
 	}
 }
