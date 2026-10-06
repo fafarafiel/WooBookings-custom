@@ -20,7 +20,7 @@
  *
  *   1. woocommerce_bookings_get_available_quantity (class-wc-product-booking.php:1413,
  *      args: $available_qty, $product, $booking_resource) — cap enforcement. Its return
- *      feeds the add-to-cart form validation (class-wc-booking-form.php:782) and block
+ *      feeds the booking form's free-slot display (class-wc-booking-form.php:782) and block
  *      bookability (class-wc-product-booking.php:1890,2214).
  *   2. woocommerce_bookings_filter_time_slots (wc-bookings-functions.php:1144,
  *      args: $slots, $bookable_product, $args) — cap on the count the grid DISPLAYS. The

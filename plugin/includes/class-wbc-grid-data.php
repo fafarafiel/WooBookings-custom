@@ -360,7 +360,7 @@ final class WBC_Grid_Data {
 		/*
 		 * Numbers are read off the canonical product; presentation (label,
 		 * description, url, add-to-cart id) off the translation. The anchor
-		 * resource is untranslatable (pule-jezykowe), so every language product
+		 * resource is not translated, so every language product
 		 * shares one resource and a translation resolves the same shared resource
 		 * as the canonical. Reading numerically on the canonical keeps the grid
 		 * language-independent either way — defensive, not required by the data.

@@ -98,6 +98,9 @@ echo "\nslot keys\n";
 
 t( '6|18:15', WBC_Host_Fields::slot_key( 6, '18:15' ), 'weekday and time compose into the map key' );
 t( '1|09:00', WBC_Host_Fields::slot_key( '1', '09:00' ), 'numeric string weekday is normalised' );
+t( 1, WBC_Host_Fields::weekday_of( '2026-10-05' ), 'a date maps to its ISO weekday' );
+t( 4, WBC_Host_Fields::weekday_of( '2024-02-29' ), 'a leap day is a real date' );
+t( 0, WBC_Host_Fields::weekday_of( '2026-02-30' ), 'an impossible date has no weekday' );
 
 echo "\nweekly slot extraction\n";
 
@@ -307,7 +310,7 @@ t( 1, $flush->calls, 'review: the slots cache is flushed once' );
 t( array(), $review->pending_ids(), 'review: the notice does not come back after an answer' );
 
 list( $review, $flush ) = wbc_review_fixture();
-t( 0, $review->apply( 'keep' ), 'review: keeping them as sessions marks nothing' );
+t( 0, $review->apply( 'keep', array( 10 ) ), 'review: keeping them as sessions marks nothing' );
 t( '', get_post_meta( 10, WBC_Config::META_IS_EVENT, true ), 'review: the capped session stays a regular session' );
 t( 0, $flush->calls, 'review: nothing marked, nothing flushed' );
 t( array(), $review->pending_ids(), 'review: the answer is recorded' );

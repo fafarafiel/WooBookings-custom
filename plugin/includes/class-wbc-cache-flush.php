@@ -1,7 +1,9 @@
 <?php
 /**
- * Cache flush — the REST /products/slots transient is cleared on add-to-cart but NOT on the
- * "downward" paths (trash, cancel, refund, hold expiry). Those must flush explicitly.
+ * Cache flush: every booking teardown and configuration save clears the slots cache of all
+ * products on the shared resource. Bookings 3.7.0 does that itself for cancel, refund and trash,
+ * but not for hold expiry or a permanent delete without trashing (own product at most) or a
+ * product save (that product only).
  *
  * @package WooBookings_Custom
  */
@@ -9,8 +11,8 @@
 defined( 'ABSPATH' ) || exit;
 
 /**
- * On any booking teardown, drop the slots transient for BOTH products on the shared resource —
- * cancelling a ceremony must also refresh the flex rental slot (shared capacity pool).
+ * On any booking teardown, drop the slots transient for every product on the shared resource:
+ * freeing a seat on one product must also refresh the others that draw on the same capacity.
  */
 final class WBC_Cache_Flush {
 
@@ -44,7 +46,7 @@ final class WBC_Cache_Flush {
 
 		/*
 		 * A refund does not need its own hook: refunding the order transitions the booking to
-		 * 'cancelled' (class-wc-booking-order-manager.php:1254), which the line above already covers.
+		 * 'cancelled' (class-wc-booking-order-manager.php:77,573), which the line above already covers.
 		 */
 
 		/*
@@ -55,8 +57,9 @@ final class WBC_Cache_Flush {
 
 		/*
 		 * Bulk "Move to Trash" from the wp-admin bookings list calls core wp_trash_post() per post
-		 * and never touches the Bookings data store, so none of the hooks above fire. Without this,
-		 * a freed seat stays "booked" in the grid for the full 1h transient TTL.
+		 * and never touches the Bookings data store, so none of the hooks above fire. Bookings 3.7.0
+		 * flushes the resource itself on wp_trash_post (class-wc-booking-order-manager.php:82,708);
+		 * this repeats it so the grid does not depend on that.
 		 */
 		add_action( 'trashed_post', array( $this, 'flush_if_booking' ), 10, 1 );
 		add_action( 'untrashed_post', array( $this, 'flush_if_booking' ), 10, 1 );
@@ -70,7 +73,7 @@ final class WBC_Cache_Flush {
 		 *   - never routes to the trash, because core sends only 'post' and 'page' to wp_trash_post()
 		 *     — 'wc_booking' is a CPT, so it is deleted outright and 'trashed_post' never fires.
 		 * The cron does clear the transient itself, but only for the booking's OWN product_id, which
-		 * leaves the second product on the shared resource stale for the full TTL. Cross-product
+		 * leaves the other products on the shared resource stale until something else clears them. Cross-product
 		 * flush is this class's entire reason to exist, so it must catch the delete itself.
 		 *
 		 * 'before_delete_post' and NOT 'deleted_post': flush_if_booking() identifies the post via
@@ -86,7 +89,7 @@ final class WBC_Cache_Flush {
 		 * (data-stores/class-wc-product-booking-data-store-cpt.php:107)
 		 * and clear_cache() on save_post does not touch booking_slots_ transients
 		 * (vendor cache class). An editor changing a session's hours would leave
-		 * the open product's slots stale for the full TTL (collective transient 1h). Any anchor
+		 * the open product's slots stale until something else clears them. Any anchor
 		 * product save → flush them all. Both hooks feed one collector; the second covers any
 		 * exotic path that persists product meta without a post update.
 		 */
@@ -123,7 +126,7 @@ final class WBC_Cache_Flush {
 	 * resource unpinned) and the discovery list no longer names it, yet its former siblings'
 	 * slots are exactly what went stale. Any saved product that (canonically) resolves to a
 	 * bookable product triggers the flush — over-flushing is a few idempotent transient
-	 * deletes, silent staleness is a wrong grid for a full TTL hour.
+	 * deletes, silent staleness is a wrong grid until the next clear.
 	 *
 	 * @return void
 	 */
